@@ -8,7 +8,7 @@ import yaml
 def update_nested_dict(d, u):
     """https://stackoverflow.com/questions/3232943/update-value-of-a-nested-dictionary-of-varying-depth"""
     for k, v in u.items():
-        if isinstance(v, collections.Mapping):
+        if isinstance(v, collections.abc.Mapping):
             d[k] = update_nested_dict(d.get(k, {}), v)
         else:
             d[k] = v
