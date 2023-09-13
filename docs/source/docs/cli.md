@@ -40,23 +40,12 @@ configuration can be specified in the configuration file. Please see
 
 ### Optional arguments
 
-- **CPU allocation**:
-
-  `--num_workers`, if given, TensorFlow will use limited CPUs.
-
-  By default, it uses only 1 CPUs. Setting it to non-positive values will be using all
-  CPUs.
-
-  Example usage:
-
-  - `--num_workers 2` for using at most 2 CPUs.
-
 - **GPU memory allocation**:
 
   `--gpu_allow_growth` or `-gr`, if given, TensorFlow will only grow the memory usage as
   is needed.
 
-  By default, it allocates all available GPU memory.
+  By default it allocates all available GPU memory.
 
   Example usage:
 
@@ -69,51 +58,23 @@ configuration can be specified in the configuration file. Please see
 
   The path must end with `.ckpt`.
 
-  By default, it starts training from a random initialization.
+  By default it starts training from a random initialization.
 
   Example usage:
 
   - `--ckpt_path weights-epoch2.ckpt` for reloading the given checkpoint.
 
-- **Log directory**:
+- **Output directory**:
 
-  `--log_dir`, specifies the log directory for logging output information and results.
+  `--log_dir` or `-l`, specifies the directory name to save logs.
 
-  By default, it is `logs` under the package root.
+  The directory will be under `logs/`.
 
-  Example usage:
-
-  - `--log_dir logs` for specifying the log directory `logs/` under current directory.
-
-- **Experiment name**:
-
-  `--exp_name` or `-n`, specifies the name of an experiment (every time a training or a
-  prediction is run), which will be used together with the log directory (via `log_dir`)
-  to specify the sub-folder that saves the output information and results from
-  individual experiments (runs).
-
-  If this is not provided, it creates a timestamp-named sub-folder under the `log_dir`,
-  by default, e.g. `logs/20200810-194042/`.
+  By default it creates a timestamp-named directory, e.g. `logs/20200810-194042/`.
 
   Example usage:
 
-  - `--exp_name test --log_dir logs` for saving under `logs/test/`.
-  - `--log_dir logs` for saving under `logs/20210101-120000/`, assuming
-    `20210101-120000` is current time.
-  - `--exp_name test` for saving under `DeepReg/logs/test/`, assuming `DeepReg` is the
-    package root.
-
-- **Maximum number of epochs**:
-
-  `--max_epochs`, specifies the maximum number of epochs for training and overwrites the
-  value defined in the configuration.
-
-  By default, the value is -1, meaning the number of epochs will be defined by
-  configuration.
-
-  Example usage:
-
-  - `--max_epochs 2` for run training only for two epochs.
+  - `--log_dir test` for saving under `logs/test/`.
 
 ### Output
 
@@ -157,82 +118,54 @@ configuration can be specified in the configuration file. Please see
 
 - **Evaluation data**:
 
-  `--split`, specifies in which data set the prediction is performed.
+  `--mode` or `-m`, specifies in which data set the prediction is performed.
 
   It must be one of `train` / `valid` / `test`.
 
   Example usage:
 
-  - `--split test` for evaluating the model on test split.
+  - `--mode test` for evaluating the model on test data.
 
 ### Optional arguments
-
-- **CPU allocation**:
-
-  `--num_workers`, if given, TensorFlow will use limited CPUs.
-
-  By default, it uses all available CPUs.
-
-  Example usage:
-
-  - `--num_workers 2` for using at most 2 CPUs.
 
 - **GPU memory allocation**:
 
   `--gpu_allow_growth` or `-gr`, if given, TensorFlow will only grow the memory usage as
   is needed.
 
-  By default, it allocates all availables in the GPU memory.
+  By default it allocates all availables in the GPU memory.
 
   Example usage:
 
   - `--gpu_allow_growth`, no extra argument is needed.
 
-- **Log directory**:
+- **Output directory**:
 
-  `--log_dir`, specifies the log directory for logging output information and results.
+  `--log_dir` or `-l`, specifies the directory name to save logs.
 
-  By default, it is `logs` under the package root.
+  The directory will be under `logs/`.
 
-  Example usage:
-
-  - `--log_dir logs` for specifying the log directory `logs/` under current directory.
-
-- **Experiment name**:
-
-  `--exp_name` or `-n`, specifies the name of an experiment (every time a training or a
-  prediction is run), which will be used together with the log directory (via `log_dir`)
-  to specify the sub-folder that saves the output information and results from
-  individual experiments (runs).
-
-  If this is not provided, it creates a timestamp-named sub-folder under the `log_dir`,
-  by default, e.g. `logs/20200810-194042/`.
+  By default is creates a timestamp-named directory like `logs/20200810-194042/`.
 
   Example usage:
 
-  - `--exp_name test --log_dir logs` for saving under `logs/test/`.
-  - `--log_dir logs` for saving under `logs/20210101-120000/`, assuming
-    `20210101-120000` is current time.
-  - `--exp_name test` for saving under `DeepReg/logs/test/`, assuming `DeepReg` is the
-    package root.
+  - `--log_dir test` for saving under `logs/test/`.
 
 - **Batch size**:
 
-  `--batch_size` or `-b`, specifies the number of samples per step for prediction. If
-  using multiple GPUs, i.e. `n` GPUs, each GPU will have mini batch size
-  `batch_size / n`. Thus, `batch_size` should be divided by `n` evenly.
+  `--batch_size` or `-b`, specifies the mini-batch size for prediction.
 
   The default value is 1.
 
   Example usage:
 
-  - `--batch_size 2` for using a global mini-batch size of 2.
+  - `--batch_size 2` for using a mini-batch size of 2.
 
 - **Save outputs in Nifti format**:
 
   The predicted 3D tensors can be saved in Nifti format for further calculation.
 
-  By default, it saves outputs in Nifti format.
+  By default it saves outputs in Nifti format.
 
   Example usage:
 
@@ -243,18 +176,12 @@ configuration can be specified in the configuration file. Please see
 
   The predicted 3D tensors can be saved as a slice of 2D images for quick visualization.
 
-  As values have to be normalized between 0~255 (or 0~1) for png files (Nifti files are
-  not impacted), all images (`moving_image`, `fixed_image` and `pred_fixed_image`) and
-  displacement/velocity fields (`ddf` and `dvf`) will be normalized before being saved.
-  Labels (`moving_label`, `fixed_label` and `pred_fixed_label`) are not affected as they
-  are already within 0~1.
-
-  By default, it saves the outputs in png format.
+  By default it saves the outputs in png format.
 
   Example usage:
 
   - `--save_png`, for saving the outputs in png format.
-  - `--no_png`, for not saving the outputs in png format.
+  - `--save_png`, for not saving the outputs in png format.
 
 - **Configuration**:
 
@@ -262,7 +189,7 @@ configuration can be specified in the configuration file. Please see
 
   The path must end with `.yaml`.
 
-  By default, it uses the configuration file saved in the directory of the given
+  By default it uses the configuration file saved in the directory of the given
   checkpoint.
 
   Example usage:
@@ -350,7 +277,7 @@ The saved files include:
   The path should end with `.nii` or `.nii.gz`, otherwise the output path will be
   corrected automatically based on the given path.
 
-  By default, it saves the output as `warped.nii.gz` in the current directory.
+  By default it saves the output as `warped.nii.gz` in the current directory.
 
   Example usage:
 
@@ -360,9 +287,3 @@ The saved files include:
 
 The warped image is saved in the given output file path, otherwise the default file path
 `warped.nii.gz` will be used.
-
-## Visualise
-
-In addition to the images in the output, DeepReg provides a set of tools with the
-command `deepreg_vis`. See more details in
-[its usage documentation](visualisation_tool.html).

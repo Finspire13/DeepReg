@@ -1,11 +1,5 @@
-Backbone
-========
-
-Interface
----------
-
-.. autoclass:: deepreg.model.backbone.interface.BackboneInterface
-    :members:
+Network Backbone
+================
 
 Local Net
 ---------

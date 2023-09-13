@@ -4,335 +4,62 @@
 Tests for deepreg/model/loss/label.py in
 pytest style
 """
-
 from test.unit.util import is_equal_tf
-from typing import Tuple
+from types import FunctionType
 
 import numpy as np
 import pytest
 import tensorflow as tf
 
-import deepreg.loss.label as label
-from deepreg.constant import EPS
+import deepreg.model.loss.label as label
 
 
-class TestSumSquaredDistance:
-    @pytest.mark.parametrize(
-        "y_true,y_pred,shape,expected",
-        [
-            (0.6, 0.3, (3,), 0.09),
-            (0.6, 0.3, (3, 3), 0.09),
-            (0.6, 0.3, (3, 3, 3), 0.09),
-            (0.6, 0.3, (3, 3, 3), 0.09),
-            (0.5, 0.5, (3, 3), 0.0),
-            (0.3, 0.6, (3, 3), 0.09),
-        ],
-    )
-    def test_output(self, y_true, y_pred, shape, expected):
-        y_true = y_true * np.ones(shape=shape)
-        y_pred = y_pred * np.ones(shape=shape)
-        expected = expected * np.ones(shape=(shape[0],))
-        got = label.SumSquaredDifference().call(
-            y_true,
-            y_pred,
-        )
-        assert is_equal_tf(got, expected)
+def test_gauss_kernel1d_0():
+    """
+    Testing case where sigma = 0, expect 0 return
+    """
+    sigma = tf.constant(0, dtype=tf.float32)
+    expect = tf.constant(0, dtype=tf.float32)
+    get = label.gauss_kernel1d(sigma)
+    assert get == expect
 
 
-class TestDiceScore:
-    @pytest.mark.parametrize(
-        ("value", "smooth_nr", "smooth_dr", "expected"),
-        [
-            (0, 1e-5, 1e-5, 1),
-            (0, 0, 1e-5, 0),
-            (0, 1e-5, 0, np.inf),
-            (0, 0, 0, np.nan),
-            (0, 1e-7, 1e-7, 1),
-            (1, 1e-5, 1e-5, 1),
-            (1, 0, 1e-5, 1),
-            (1, 1e-5, 0, 1),
-            (1, 0, 0, 1),
-            (1, 1e-7, 1e-7, 1),
-        ],
-    )
-    def test_smooth(
-        self,
-        value: float,
-        smooth_nr: float,
-        smooth_dr: float,
-        expected: float,
-    ):
-        """
-        Test values in extreme cases where numerator/denominator are all zero.
-
-        :param value: value for input.
-        :param smooth_nr: constant for numerator.
-        :param smooth_dr: constant for denominator.
-        :param expected: target value.
-        """
-        shape = (1, 10)
-        y_true = tf.ones(shape=shape) * value
-        y_pred = tf.ones(shape=shape) * value
-
-        got = label.DiceScore(smooth_nr=smooth_nr, smooth_dr=smooth_dr).call(
-            y_true,
-            y_pred,
-        )
-        expected = tf.constant(expected)
-        assert is_equal_tf(got[0], expected)
-
-    @pytest.mark.parametrize("binary", [True, False])
-    @pytest.mark.parametrize("background_weight", [0.0, 0.1, 0.5, 1.0])
-    @pytest.mark.parametrize("shape", [(1,), (10,), (100,), (2, 3), (2, 3, 4)])
-    def test_exact_value(self, binary: bool, background_weight: float, shape: Tuple):
-        """
-        Test dice score by comparing at ground truth values.
-
-        :param binary: if project labels to binary values.
-        :param background_weight: the weight of background class.
-        :param shape: shape of input.
-        """
-        # init
-        shape = (1,) + shape  # add batch axis
-        foreground_weight = 1 - background_weight
-        tf.random.set_seed(0)
-        y_true = tf.random.uniform(shape=shape)
-        y_pred = tf.random.uniform(shape=shape)
-
-        # obtained value
-        got = label.DiceScore(
-            binary=binary,
-            background_weight=background_weight,
-        ).call(y_true=y_true, y_pred=y_pred)
-
-        # expected value
-        flatten = tf.keras.layers.Flatten()
-        y_true = flatten(y_true)
-        y_pred = flatten(y_pred)
-        if binary:
-            y_true = tf.cast(y_true >= 0.5, dtype=y_true.dtype)
-            y_pred = tf.cast(y_pred >= 0.5, dtype=y_pred.dtype)
-
-        num = foreground_weight * tf.reduce_sum(
-            y_true * y_pred, axis=1
-        ) + background_weight * tf.reduce_sum((1 - y_true) * (1 - y_pred), axis=1)
-        num *= 2
-        denom = foreground_weight * tf.reduce_sum(
-            y_true + y_pred, axis=1
-        ) + background_weight * tf.reduce_sum((1 - y_true) + (1 - y_pred), axis=1)
-        expected = (num + EPS) / (denom + EPS)
-
-        assert is_equal_tf(got, expected)
-
-    def test_get_config(self):
-        got = label.DiceScore().get_config()
-        expected = dict(
-            binary=False,
-            background_weight=0.0,
-            smooth_nr=1e-5,
-            smooth_dr=1e-5,
-            reduction=tf.keras.losses.Reduction.AUTO,
-            name="DiceScore",
-        )
-        assert got == expected
-
-    @pytest.mark.parametrize("background_weight", [-0.1, 1.1])
-    def test_background_weight_err(self, background_weight: float):
-        """
-        Test the error message when using wrong background weight.
-
-        :param background_weight: weight for background class.
-        """
-        with pytest.raises(ValueError) as err_info:
-            label.DiceScore(background_weight=background_weight)
-        assert "The background weight for Dice Score must be within [0, 1]" in str(
-            err_info.value
-        )
+def test_gauss_kernel1d_else():
+    """
+    Testing case where sigma is not 0,
+    expect a tensor returned.
+    """
+    sigma = 3
+    get = tf.cast(label.gauss_kernel1d(sigma), dtype=tf.float32)
+    expect = [
+        np.exp(-0.5 * x ** 2 / sigma ** 2) for x in range(-sigma * 3, sigma * 3 + 1)
+    ]
+    expect = tf.convert_to_tensor(expect, dtype=tf.float32)
+    expect = expect / tf.reduce_sum(expect)
+    assert is_equal_tf(get, expect)
 
 
-class TestCrossEntropy:
-    shape = (3, 3, 3, 3)
-
-    @pytest.fixture()
-    def y_true(self):
-        return np.ones(shape=self.shape) * 0.6
-
-    @pytest.fixture()
-    def y_pred(self):
-        return np.ones(shape=self.shape) * 0.3
-
-    @pytest.mark.parametrize(
-        ("value", "smooth", "expected"),
-        [
-            (0, 1e-5, 0),
-            (0, 0, np.nan),
-            (0, 1e-7, 0),
-            (1, 1e-5, -np.log(1 + 1e-5)),
-            (1, 0, 0),
-            (1, 1e-7, -np.log(1 + 1e-7)),
-        ],
-    )
-    def test_smooth(
-        self,
-        value: float,
-        smooth: float,
-        expected: float,
-    ):
-        """
-        Test values in extreme cases where numerator/denominator are all zero.
-
-        :param value: value for input.
-        :param smooth: constant for log.
-        :param expected: target value.
-        """
-        shape = (1, 10)
-        y_true = tf.ones(shape=shape) * value
-        y_pred = tf.ones(shape=shape) * value
-
-        got = label.CrossEntropy(smooth=smooth).call(
-            y_true,
-            y_pred,
-        )
-        expected = tf.constant(expected)
-        assert is_equal_tf(got[0], expected)
-
-    @pytest.mark.parametrize(
-        "binary,background_weight,expected",
-        [
-            (True, 0.0, -np.log(EPS)),
-            (False, 0.0, -0.6 * np.log(0.3 + EPS)),
-            (False, 0.2, -0.48 * np.log(0.3 + EPS) - 0.08 * np.log(0.7 + EPS)),
-        ],
-    )
-    def testcall(self, y_true, y_pred, binary, background_weight, expected):
-        expected = np.array([expected] * self.shape[0])  # call returns (batch, )
-        got = label.CrossEntropy(
-            binary=binary,
-            background_weight=background_weight,
-        ).call(y_true=y_true, y_pred=y_pred)
-        assert is_equal_tf(got, expected)
-
-    def test_get_config(self):
-        got = label.CrossEntropy().get_config()
-        expected = dict(
-            binary=False,
-            background_weight=0.0,
-            smooth=1e-5,
-            reduction=tf.keras.losses.Reduction.AUTO,
-            name="CrossEntropy",
-        )
-        assert got == expected
-
-    @pytest.mark.parametrize("background_weight", [-0.1, 1.1])
-    def test_background_weight_err(self, background_weight: float):
-        """
-        Test the error message when using wrong background weight.
-
-        :param background_weight: weight for background class.
-        """
-        with pytest.raises(ValueError) as err_info:
-            label.CrossEntropy(background_weight=background_weight)
-        assert "The background weight for Cross Entropy must be within [0, 1]" in str(
-            err_info.value
-        )
+def test_cauchy_kernel_0():
+    """
+    Test case where sigma = 0, expect 0 return.
+    """
+    sigma = tf.constant(0, dtype=tf.float32)
+    expect = tf.constant(0, dtype=tf.float32)
+    get = label.cauchy_kernel1d(sigma)
+    assert get == expect
 
 
-class TestJaccardIndex:
-    @pytest.mark.parametrize(
-        ("value", "smooth_nr", "smooth_dr", "expected"),
-        [
-            (0, 1e-5, 1e-5, 1),
-            (0, 0, 1e-5, 0),
-            (0, 1e-5, 0, np.inf),
-            (0, 0, 0, np.nan),
-            (0, 1e-7, 1e-7, 1),
-            (1, 1e-5, 1e-5, 1),
-            (1, 0, 1e-5, 1),
-            (1, 1e-5, 0, 1),
-            (1, 0, 0, 1),
-            (1, 1e-7, 1e-7, 1),
-        ],
-    )
-    def test_smooth(
-        self,
-        value: float,
-        smooth_nr: float,
-        smooth_dr: float,
-        expected: float,
-    ):
-        """
-        Test values in extreme cases where numerator/denominator are all zero.
-
-        :param value: value for input.
-        :param smooth_nr: constant for numerator.
-        :param smooth_dr: constant for denominator.
-        :param expected: target value.
-        """
-        shape = (1, 10)
-        y_true = tf.ones(shape=shape) * value
-        y_pred = tf.ones(shape=shape) * value
-
-        got = label.JaccardIndex(smooth_nr=smooth_nr, smooth_dr=smooth_dr).call(
-            y_true,
-            y_pred,
-        )
-        expected = tf.constant(expected)
-        assert is_equal_tf(got[0], expected)
-
-    @pytest.mark.parametrize("binary", [True, False])
-    @pytest.mark.parametrize("background_weight", [0.0, 0.1, 0.5, 1.0])
-    @pytest.mark.parametrize("shape", [(1,), (10,), (100,), (2, 3), (2, 3, 4)])
-    def test_exact_value(self, binary: bool, background_weight: float, shape: Tuple):
-        """
-        Test Jaccard index by comparing at ground truth values.
-
-        :param binary: if project labels to binary values.
-        :param background_weight: the weight of background class.
-        :param shape: shape of input.
-        """
-        # init
-        shape = (1,) + shape  # add batch axis
-        foreground_weight = 1 - background_weight
-        tf.random.set_seed(0)
-        y_true = tf.random.uniform(shape=shape)
-        y_pred = tf.random.uniform(shape=shape)
-
-        # obtained value
-        got = label.JaccardIndex(
-            binary=binary,
-            background_weight=background_weight,
-        ).call(y_true=y_true, y_pred=y_pred)
-
-        # expected value
-        flatten = tf.keras.layers.Flatten()
-        y_true = flatten(y_true)
-        y_pred = flatten(y_pred)
-        if binary:
-            y_true = tf.cast(y_true >= 0.5, dtype=y_true.dtype)
-            y_pred = tf.cast(y_pred >= 0.5, dtype=y_pred.dtype)
-
-        num = foreground_weight * tf.reduce_sum(
-            y_true * y_pred, axis=1
-        ) + background_weight * tf.reduce_sum((1 - y_true) * (1 - y_pred), axis=1)
-        denom = foreground_weight * tf.reduce_sum(
-            y_true + y_pred, axis=1
-        ) + background_weight * tf.reduce_sum((1 - y_true) + (1 - y_pred), axis=1)
-        denom = denom - num
-        expected = (num + EPS) / (denom + EPS)
-
-        assert is_equal_tf(got, expected)
-
-    def test_get_config(self):
-        got = label.JaccardIndex().get_config()
-        expected = dict(
-            binary=False,
-            background_weight=0.0,
-            smooth_nr=1e-5,
-            smooth_dr=1e-5,
-            reduction=tf.keras.losses.Reduction.AUTO,
-            name="JaccardIndex",
-        )
-        assert got == expected
+def test_cauchy_kernel_else():
+    """
+    Test case where sigma is not 0, expect
+    tensor returned.
+    """
+    sigma = 3
+    get = tf.cast(label.cauchy_kernel1d(sigma), dtype=tf.float32)
+    expect = [1 / ((x / sigma) ** 2 + 1) for x in range(-sigma * 5, sigma * 5 + 1)]
+    expect = tf.convert_to_tensor(expect, dtype=tf.float32)
+    expect = expect / tf.reduce_sum(expect)
+    assert is_equal_tf(get, expect)
 
 
 def test_foreground_prop_binary():
@@ -367,24 +94,168 @@ def test_foreground_prop_simple():
     assert is_equal_tf(get, expect)
 
 
+def test_jaccard_index():
+    """
+    Testing jaccard index function with computed
+    tensor.
+    """
+    array_eye = np.identity(3, dtype=np.float32)
+    tensor_eye = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_eye[:, :, 0:3, 0:3] = array_eye
+    tensor_eye = tf.convert_to_tensor(tensor_eye, dtype=tf.float32)
+
+    tensor_pred = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_pred[:, 0:2, :, :] = array_eye
+    tensor_pred = tf.convert_to_tensor(tensor_pred, dtype=tf.float32)
+
+    num = np.array([6, 6, 6])
+    denom = np.array([9, 9, 9]) + np.array([6, 6, 6]) - num
+
+    get = num / denom
+    expect = label.jaccard_index(tensor_eye, tensor_pred)
+    assert is_equal_tf(get, expect)
+
+
+def test_dice_not_binary():
+    """
+    Testing dice score with binary tensor
+    comparing to a precomputed value.
+    """
+    array_eye = np.identity(3, dtype=np.float32)
+    tensor_eye = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_eye[:, :, 0:3, 0:3] = array_eye
+    tensor_eye = tf.convert_to_tensor(tensor_eye, dtype=tf.float32)
+
+    tensor_pred = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_pred[:, 0:2, :, :] = array_eye
+    tensor_pred = tf.convert_to_tensor(tensor_pred, dtype=tf.float32)
+
+    num = 2 * np.array([6, 6, 6])
+    denom = np.array([9, 9, 9]) + np.array([6, 6, 6])
+
+    get = num / denom
+    expect = label.dice_score(tensor_eye, tensor_pred)
+    assert is_equal_tf(get, expect)
+
+
+def test_dice_binary():
+    """
+    Testing dice score with not binary tensor
+    to assert thresholding works.
+    """
+    array_eye = 0.6 * np.identity(3, dtype=np.float32)
+    tensor_eye = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_eye[:, :, 0:3, 0:3] = array_eye
+    tensor_eye = tf.convert_to_tensor(tensor_eye, dtype=tf.float32)
+
+    tensor_pred = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_pred[:, 0:2, :, :] = array_eye
+    tensor_pred = tf.convert_to_tensor(tensor_pred, dtype=tf.float32)
+
+    num = 2 * np.array([6, 6, 6])
+    denom = np.array([9, 9, 9]) + np.array([6, 6, 6])
+
+    get = num / denom
+    expect = label.dice_score(tensor_eye, tensor_pred, binary=True)
+    assert is_equal_tf(get, expect)
+
+
+def test_dice_general():
+    """
+    Testing general dice function with
+    non binary features and checking
+    against precomputed tensor.
+    """
+    array_eye = 0.6 * np.identity(3, dtype=np.float32)
+    tensor_eye = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_eye[:, :, 0:3, 0:3] = array_eye
+    tensor_eye = tf.convert_to_tensor(tensor_eye, dtype=tf.float32)
+
+    tensor_pred = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_pred[:, 0:2, :, :] = array_eye
+    tensor_pred = tf.convert_to_tensor(tensor_pred, dtype=tf.float32)
+
+    y_prod = np.sum(tensor_eye * tensor_pred, axis=(1, 2, 3))
+    y_sum = np.sum(tensor_eye, axis=(1, 2, 3)) + np.sum(tensor_pred, axis=(1, 2, 3))
+
+    num = 2 * y_prod
+    den = y_sum
+    expect = num / den
+    get = label.dice_score_generalized(tensor_eye, tensor_pred)
+
+    assert is_equal_tf(get, expect)
+
+
+def test_weighted_bce():
+    """
+    Checking binary cross entropy calculation
+    against a precomputed tensor.
+    """
+    array_eye = np.identity(3, dtype=np.float32)
+    tensor_eye = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_eye[:, :, 0:3, 0:3] = array_eye
+    tensor_eye = tf.convert_to_tensor(tensor_eye, dtype=tf.float32)
+
+    tensor_pred = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_pred[:, 0:2, :, :] = array_eye
+    tensor_pred = tf.convert_to_tensor(tensor_pred, dtype=tf.float32)
+
+    expect = [1.535057, 1.535057, 1.535057]
+    get = label.weighted_binary_cross_entropy(tensor_eye, tensor_pred)
+    assert is_equal_tf(get, expect)
+
+
+def test_separable_filter_0():
+    """
+    Testing separable filter with case where
+    0 length vector is passed.
+    """
+    pass
+    # kernel = np.empty((0))
+    # array_eye = np.identity(3, dtype=np.float32)
+    # get = label.separable_filter3d(array_eye, kernel)
+    # expect = array_eye
+    # assert is_equal_tf(get, expect)
+
+
+def test_separable_filter_else():
+    """
+    Testing separable filter case where non
+    zero length tensor is passed to the
+    function.
+    """
+    k = np.ones((3, 3, 3, 3), dtype=np.float32)
+    array_eye = np.identity(3, dtype=np.float32)
+    tensor_pred = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_pred[:, :, 0, 0] = array_eye
+    tensor_pred = tf.convert_to_tensor(tensor_pred, dtype=tf.float32)
+    k = tf.convert_to_tensor(k, dtype=tf.float32)
+
+    expect = np.ones((3, 3, 3, 3), dtype=np.float32)
+    expect = tf.convert_to_tensor(expect, dtype=tf.float32)
+
+    get = label.separable_filter3d(tensor_pred, k)
+    assert is_equal_tf(get, expect)
+
+
 def test_compute_centroid():
     """
     Testing compute centroid function
     and comparing to expected values.
     """
+    array_ones = np.ones((2, 2))
     tensor_mask = np.zeros((3, 2, 2, 2))
-    tensor_mask[0, :, :, :] = np.ones((2, 2, 2))
-    tensor_mask = tf.constant(tensor_mask, dtype=tf.float32)
+    tensor_mask[0, :, :, :] = array_ones
+    tensor_mask = tf.convert_to_tensor(tensor_mask, dtype=tf.float32)
 
-    tensor_grid = np.ones((1, 2, 2, 2, 3))
-    tensor_grid[:, :, :, :, 1] *= 2
-    tensor_grid[:, :, :, :, 2] *= 3
-    tensor_grid = tf.constant(tensor_grid, dtype=tf.float32)
+    tensor_grid = np.zeros((2, 2, 2, 3))
+    tensor_grid[:, :, :, 0] = array_ones
+    tensor_grid = tf.convert_to_tensor(tensor_grid, dtype=tf.float32)
 
-    expected = np.ones((3, 3))  # use 1 because 0/0 ~= (0+eps)/(0+eps) = 1
-    expected[0, :] = [1, 2, 3]
-    got = label.compute_centroid(tensor_mask, tensor_grid)
-    assert is_equal_tf(got, expected)
+    expect = np.ones((3, 3))
+    expect[0, 1:3] = 0
+    get = label.compute_centroid(tensor_mask, tensor_grid)
+    assert is_equal_tf(get, expect)
 
 
 def test_compute_centroid_d():
@@ -397,10 +268,220 @@ def test_compute_centroid_d():
     tensor_mask[0, :, :, :] = array_ones
     tensor_mask = tf.convert_to_tensor(tensor_mask, dtype=tf.float32)
 
-    tensor_grid = np.zeros((1, 2, 2, 2, 3))
-    tensor_grid[:, :, :, :, 0] = array_ones
+    tensor_grid = np.zeros((2, 2, 2, 3))
+    tensor_grid[:, :, :, 0] = array_ones
     tensor_grid = tf.convert_to_tensor(tensor_grid, dtype=tf.float32)
 
     get = label.compute_centroid_distance(tensor_mask, tensor_mask, tensor_grid)
     expect = np.zeros((3))
     assert is_equal_tf(get, expect)
+
+
+def test_squared_error():
+    """
+    Testing squared error function by comparing
+    to precomputed tensor.
+    """
+    tensor_mask = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_mask[0, 0, 0, 0] = 1
+    tensor_mask = tf.convert_to_tensor(tensor_mask, dtype=tf.float32)
+
+    tensor_pred = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_pred[:, :, :, :] = 1
+    tensor_pred = tf.convert_to_tensor(tensor_pred, dtype=tf.float32)
+
+    expect = np.array([26 / 27, 1.0, 1.0])
+    get = label.squared_error(tensor_mask, tensor_pred)
+    assert is_equal_tf(get, expect)
+
+
+def test_single_scale_loss_dice():
+    """
+    Testing single sclare loss returns
+    precomputed, known dice loss for given
+    inputs.
+    """
+    array_eye = np.identity(3, dtype=np.float32)
+    tensor_eye = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_eye[:, :, 0:3, 0:3] = array_eye
+    tensor_eye = tf.convert_to_tensor(tensor_eye, dtype=tf.float32)
+
+    tensor_pred = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_pred[:, 0:2, :, :] = array_eye
+    tensor_pred = tf.convert_to_tensor(tensor_pred, dtype=tf.float32)
+
+    num = 2 * np.array([6, 6, 6])
+    denom = np.array([9, 9, 9]) + np.array([6, 6, 6])
+
+    expect = 1 - (num / denom)
+    get = label.single_scale_loss(tensor_eye, tensor_pred, "dice")
+    assert is_equal_tf(get, expect)
+
+
+def test_single_scale_loss_bce():
+    """
+    Testing bce single scale loss entry
+    returns known loss tensor for given inputs.
+    """
+    array_eye = np.identity(3, dtype=np.float32)
+    tensor_eye = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_eye[:, :, 0:3, 0:3] = array_eye
+    tensor_eye = tf.convert_to_tensor(tensor_eye, dtype=tf.float32)
+
+    tensor_pred = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_pred[:, 0:2, :, :] = array_eye
+    tensor_pred = tf.convert_to_tensor(tensor_pred, dtype=tf.float32)
+
+    expect = [1.535057, 1.535057, 1.535057]
+    get = label.single_scale_loss(tensor_eye, tensor_pred, "cross-entropy")
+
+    assert is_equal_tf(get, expect)
+
+
+def test_single_scale_loss_dg():
+    """
+    Testing generalised dice loss single
+    scale loss function returns known loss
+    tensor for given inputs.
+    """
+    array_eye = 0.6 * np.identity(3, dtype=np.float32)
+    tensor_eye = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_eye[:, :, 0:3, 0:3] = array_eye
+    tensor_eye = tf.convert_to_tensor(tensor_eye, dtype=tf.float32)
+
+    tensor_pred = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_pred[:, 0:2, :, :] = array_eye
+    tensor_pred = tf.convert_to_tensor(tensor_pred, dtype=tf.float32)
+
+    y_prod = np.sum(tensor_eye * tensor_pred, axis=(1, 2, 3))
+    y_sum = np.sum(tensor_eye, axis=(1, 2, 3)) + np.sum(tensor_pred, axis=(1, 2, 3))
+
+    num = 2 * y_prod
+    den = y_sum
+    expect = 1 - num / den
+    get = label.single_scale_loss(tensor_eye, tensor_pred, "dice_generalized")
+    assert is_equal_tf(get, expect)
+
+
+def test_single_scale_loss_jacc():
+    """
+    Testing single scale loss returns known loss
+    tensor when called with jaccard argment.
+    """
+    array_eye = np.identity(3, dtype=np.float32)
+    tensor_eye = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_eye[:, :, 0:3, 0:3] = array_eye
+    tensor_eye = tf.convert_to_tensor(tensor_eye, dtype=tf.float32)
+
+    tensor_pred = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_pred[:, 0:2, :, :] = array_eye
+    tensor_pred = tf.convert_to_tensor(tensor_pred, dtype=tf.float32)
+
+    num = np.array([6, 6, 6])
+    denom = np.array([9, 9, 9]) + np.array([6, 6, 6]) - num
+
+    expect = 1 - (num / denom)
+    get = label.single_scale_loss(tensor_eye, tensor_pred, "jaccard")
+    assert is_equal_tf(get, expect)
+
+
+def test_single_scale_loss_mean_sq():
+    """
+    Test single scale loss function returns
+    known mean sq value tensor when passed with
+    mean squared arg,
+    """
+    tensor_mask = np.zeros((3, 3, 3, 3))
+    tensor_mask[0, 0, 0, 0] = 1
+    tensor_mask = tf.convert_to_tensor(tensor_mask, dtype=tf.float32)
+
+    tensor_pred = tf.convert_to_tensor(np.ones((3, 3, 3, 3)), dtype=tf.float32)
+    expect = tf.convert_to_tensor(np.array([26 / 27, 1.0, 1.0]), dtype=tf.float32)
+
+    get = label.single_scale_loss(tensor_mask, tensor_pred, "mean-squared")
+    assert is_equal_tf(get, expect)
+
+
+def test_single_scale_loss_other():
+    """
+    Test value error raised if non supported
+    string passed to the single scale loss function.
+    """
+    tensor_eye = tf.convert_to_tensor(np.zeros((3, 3, 3, 3)), dtype=tf.float32)
+    tensor_pred = tf.convert_to_tensor(np.zeros((3, 3, 3, 3)), dtype=tf.float32)
+
+    with pytest.raises(ValueError):
+        label.single_scale_loss(tensor_eye, tensor_pred, "random")
+
+
+def test_multi_scale_loss_pred_len():
+    """
+    Test assertion error raised if a wrongly sized tensor
+    is passed to the multi-scale loss function.
+    """
+    tensor_true = tf.convert_to_tensor(np.zeros((3, 3, 3, 3)), dtype=tf.float32)
+    tensor_pred = tf.convert_to_tensor(np.zeros((3, 3, 3)), dtype=tf.float32)
+    with pytest.raises(AssertionError):
+        label.multi_scale_loss(
+            tensor_true, tensor_pred, loss_type="jaccard", loss_scales=[0, 1, 2]
+        )
+
+
+def test_multi_scale_loss_true_len():
+    """
+    Test assertion error raised if a wrongly sized tensor
+    is passed to the multi-scale loss function.
+    """
+    tensor_true = tf.convert_to_tensor(np.zeros((3, 3, 3)), dtype=tf.float32)
+    tensor_pred = tf.convert_to_tensor(np.zeros((3, 3, 3, 3)), dtype=tf.float32)
+    with pytest.raises(AssertionError):
+        label.multi_scale_loss(
+            tensor_true, tensor_pred, loss_type="jaccard", loss_scales=[0, 1, 2]
+        )
+
+
+def test_multi_scale_loss_kernel():
+    """
+    Test multi-scale loss kernel returns the appropriate
+    loss tensor for same inputs and jaccard cal.
+    """
+    loss_values = [1, 2, 3]
+    array_eye = np.identity(3, dtype=np.float32)
+    tensor_pred = np.zeros((3, 3, 3, 3), dtype=np.float32)
+    tensor_eye = np.zeros((3, 3, 3, 3), dtype=np.float32)
+
+    tensor_eye[:, :, 0:3, 0:3] = array_eye
+    tensor_pred[:, :, 0, 0] = array_eye
+    tensor_eye = tf.convert_to_tensor(tensor_eye, dtype=tf.float32)
+    tensor_pred = tf.convert_to_tensor(tensor_pred, dtype=tf.float32)
+    expect = tf.constant([0.9938445, 0.9924956, 0.9938445], dtype=tf.float32)
+    get = label.multi_scale_loss(tensor_eye, tensor_pred, "jaccard", loss_values)
+    assert is_equal_tf(get, expect)
+
+
+def test_similarity_fn_unknown_loss():
+    """
+    Test dissimilarity function raises an error
+    if an unknonw loss type is passed.
+    """
+    config = {"name": "random"}
+    with pytest.raises(ValueError):
+        label.get_dissimilarity_fn(config)
+
+
+def test_similarity_fn_multi_scale():
+    """
+    Asserting loss function returned by get dissimilarity
+    function when appropriate strings passed.
+    """
+    config = {"name": "multi_scale", "multi_scale": "jaccard"}
+    assert isinstance(label.get_dissimilarity_fn(config), FunctionType)
+
+
+def test_similarity_fn_single_scale():
+    """
+    Asserting loss function returned by get dissimilarity
+    function when appropriate strings passed.
+    """
+    config = {"name": "single_scale", "single_scale": "jaccard"}
+    assert isinstance(label.get_dissimilarity_fn(config), FunctionType)

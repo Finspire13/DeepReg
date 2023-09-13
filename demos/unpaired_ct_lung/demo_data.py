@@ -18,7 +18,7 @@ os.chdir(main_path)
 
 ######## DOWNLOADING AND UNZIPPING ALL FILES INTO CORRECT PATH ########
 
-project_dir = "demos/unpaired_ct_lung"
+project_dir = r"demos/unpaired_ct_lung"
 os.chdir(project_dir)
 
 url = "https://zenodo.org/record/3835682/files/training.zip"
@@ -37,11 +37,10 @@ get_file(os.path.join(os.getcwd(), fname), url)
 
 print("The file ", fname, " has successfully been downloaded!")
 
-data_folder_name = "dataset"
-path_to_data_folder = os.path.join(main_path, project_dir, data_folder_name)
-if os.path.exists(path_to_data_folder):
-    shutil.rmtree(path_to_data_folder)
-os.mkdir(path_to_data_folder)
+data_folder_name = "data"
+
+if os.path.exists(os.path.join(main_path, project_dir, data_folder_name)) is not True:
+    os.mkdir(os.path.join(main_path, project_dir, data_folder_name))
 
 with zipfile.ZipFile(fname, "r") as zip_ref:
     zip_ref.extractall(data_folder_name)
@@ -53,6 +52,7 @@ os.chdir(main_path)
 
 ######## MOVING FILES INTO TRAIN DIRECTORY ########
 
+path_to_data_folder = os.path.join(main_path, project_dir, data_folder_name)
 path_to_train = os.path.join(main_path, project_dir, data_folder_name, "train")
 path_to_test = os.path.join(main_path, project_dir, data_folder_name, "test")
 path_to_images_and_labels = os.path.join(
@@ -70,7 +70,7 @@ if os.path.exists(path_to_train) is not True:
     os.mkdir(os.path.join(path_to_train, "moving_labels"))
 
 
-def move_files_into_correct_path(
+def moveFilesIntoCorrectPath(
     fnames, path_to_images_and_labels, new_path, suffix, sub_folder_name
 ):
     os.chdir(os.path.join(path_to_images_and_labels, sub_folder_name))
@@ -86,10 +86,10 @@ def move_files_into_correct_path(
 
 
 if os.path.exists(path_to_images_and_labels):
-    move_files_into_correct_path(
+    moveFilesIntoCorrectPath(
         images_fnames, path_to_images_and_labels, path_to_train, "images", "scans"
     )
-    move_files_into_correct_path(
+    moveFilesIntoCorrectPath(
         labels_fnames, path_to_images_and_labels, path_to_train, "labels", "lungMasks"
     )
 
@@ -128,7 +128,7 @@ if os.path.exists(path_to_test) is not True:
         int(int(ratio_of_test_and_valid_samples * len(unique_case_names) / 2)) + 1 :
     ]
 
-    def move_test_cases_into_correct_path(test_cases, path_to_train, path_to_test):
+    def moveTestCasesIntoCorrectPath(test_cases, path_to_train, path_to_test):
         folder_names = os.listdir(path_to_train)
         os.chdir(path_to_train)
         for case in test_cases:
@@ -141,7 +141,7 @@ if os.path.exists(path_to_test) is not True:
                         destination = os.path.join(path_to_test, folder)
                         shutil.move(source, destination)
 
-    move_test_cases_into_correct_path(test_cases, path_to_train, path_to_test)
+    moveTestCasesIntoCorrectPath(test_cases, path_to_train, path_to_test)
 
     os.mkdir(path_to_valid)
     os.mkdir(os.path.join(path_to_valid, "fixed_images"))
@@ -149,7 +149,7 @@ if os.path.exists(path_to_test) is not True:
     os.mkdir(os.path.join(path_to_valid, "moving_images"))
     os.mkdir(os.path.join(path_to_valid, "moving_labels"))
 
-    move_test_cases_into_correct_path(valid_cases, path_to_train, path_to_valid)
+    moveTestCasesIntoCorrectPath(valid_cases, path_to_train, path_to_valid)
 
 ######## NAMING FILES SUCH THAT THEIR NAMES MATCH FOR PAIRING ########
 
@@ -163,8 +163,6 @@ for folder in os.listdir(path_to_train):
             new_name = file.replace("_insp", "")
         elif "_exp" in file:
             new_name = file.replace("_exp", "")
-        else:
-            continue
         source = file
         destination = new_name
         os.rename(source, destination)
@@ -179,8 +177,6 @@ for folder in os.listdir(path_to_test):
             new_name = file.replace("_insp", "")
         elif "_exp" in file:
             new_name = file.replace("_exp", "")
-        else:
-            continue
         source = file
         destination = new_name
         os.rename(source, destination)
@@ -195,8 +191,6 @@ for folder in os.listdir(path_to_valid):
             new_name = file.replace("_insp", "")
         elif "_exp" in file:
             new_name = file.replace("_exp", "")
-        else:
-            continue
         source = file
         destination = new_name
         os.rename(source, destination)
@@ -230,7 +224,7 @@ os.chdir(main_path)
 
 ######## NOW WE RESACLE THE IMAGES TO 255 ########
 
-data_dir = "demos/unpaired_ct_lung/dataset"
+data_dir = r"demos/unpaired_ct_lung/data"
 folders = os.listdir(data_dir)
 
 for folder in folders:
@@ -259,17 +253,15 @@ for folder in folders:
 
 ######## DOWNLOAD MODEL CKPT FROM MODEL ZOO ########
 
-url = "https://github.com/DeepRegNet/deepreg-model-zoo/raw/master/demo/unpaired_ct_lung/20210110.zip"
+url = "https://github.com/DeepRegNet/deepreg-model-zoo/raw/master/unpaired_ct_lung_demo_logs.zip"
 
-fname = "pretrained.zip"
+fname = "unpaired_ct_lung_demo_logs.zip"
 
 os.chdir(os.path.join(main_path, project_dir))
 
 get_file(os.path.join(os.getcwd(), fname), url)
 
 with zipfile.ZipFile(fname, "r") as zip_ref:
-    zip_ref.extractall(os.path.join(data_folder_name, "pretrained"))
+    zip_ref.extractall(".")
 
-# remove pretrained.zip
-os.remove(fname)
 print("Pretrained model downloaded")

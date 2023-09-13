@@ -7,7 +7,7 @@ import zipfile
 
 from tensorflow.keras.utils import get_file
 
-PROJECT_DIR = "demos/unpaired_us_prostate_cv"
+PROJECT_DIR = r"demos/unpaired_us_prostate_cv"
 os.chdir(PROJECT_DIR)
 
 DATA_PATH = "dataset"
@@ -26,14 +26,14 @@ os.remove(ZIP_PATH)
 
 print("TRUS 3d data downloaded: %s." % os.path.abspath(DATA_PATH))
 
-# Download the pretrained models
-MODEL_PATH = os.path.join(DATA_PATH, "pretrained")
+# Download the pre-trained models
+MODEL_PATH = os.path.join(DATA_PATH, "pre-trained")
 if os.path.exists(MODEL_PATH):
     shutil.rmtree(MODEL_PATH)
 os.mkdir(MODEL_PATH)
 
-ZIP_PATH = "unpaired_us_prostate_cv_1"
-ORIGIN = "https://github.com/DeepRegNet/deepreg-model-zoo/raw/master/demo/unpaired_us_prostate_cv/20210110.zip"
+ZIP_PATH = "unpaired_us_prostate_cv-ckpt"
+ORIGIN = "https://github.com/DeepRegNet/deepreg-model-zoo/raw/master/unpaired_us_prostate_cv-ckpt.zip"
 
 zip_file = os.path.join(MODEL_PATH, ZIP_PATH + ".zip")
 get_file(os.path.abspath(zip_file), ORIGIN)
@@ -42,5 +42,5 @@ with zipfile.ZipFile(zip_file, "r") as zf:
 os.remove(zip_file)
 
 print(
-    "pretrained model is downloaded and unzipped in %s." % os.path.abspath(MODEL_PATH)
+    "Pre-trained model is downloaded and unzipped in %s." % os.path.abspath(MODEL_PATH)
 )

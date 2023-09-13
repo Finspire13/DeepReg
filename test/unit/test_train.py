@@ -6,71 +6,73 @@ pytest style
 """
 
 import os
-import shutil
 
 import pytest
+import tensorflow as tf
 
 from deepreg.predict import main as predict_main
-from deepreg.train import build_config
+from deepreg.train import build_callbacks, build_config
 from deepreg.train import main as train_main
 
 
-class TestBuildConfig:
-    # in the config, epochs = save_period = 2
+def test_build_config():
+    """
+    Test build_config and check log_dir setting and checkpoint path verification
+    """
     config_path = "config/unpaired_labeled_ddf.yaml"
-    exp_name = "test_build_config"
-    log_dir = "logs"
+    log_dir = "test_build_config"
 
-    @pytest.mark.parametrize("ckpt_path", ["", "example.ckpt"])
-    def test_ckpt_path(self, ckpt_path):
-        # check the code can pass
-
-        got_config, got_log_dir, _ = build_config(
-            config_path=self.config_path,
-            log_dir=self.log_dir,
-            exp_name=self.exp_name,
-            ckpt_path=ckpt_path,
-        )
-        assert isinstance(got_config, dict)
-        assert got_log_dir == os.path.join(self.log_dir, self.exp_name)
-
-    @pytest.mark.parametrize(
-        "max_epochs, expected_epochs, expected_save_period", [(-1, 2, 2), (3, 3, 2)]
+    # checkpoint path empty
+    got_config, got_log_dir = build_config(
+        config_path=config_path, log_dir=log_dir, ckpt_path=""
     )
-    def test_max_epochs(self, max_epochs, expected_epochs, expected_save_period):
-        got_config, _, _ = build_config(
-            config_path=self.config_path,
-            log_dir=self.log_dir,
-            exp_name=self.exp_name,
-            ckpt_path="",
-            max_epochs=max_epochs,
-        )
-        assert got_config["train"]["epochs"] == expected_epochs
-        assert got_config["train"]["save_period"] == expected_save_period
+    assert isinstance(got_config, dict)
+    assert got_log_dir == os.path.join("logs", log_dir)
+
+    # checkpoint path ends with ckpt
+    got_config, got_log_dir = build_config(
+        config_path=config_path, log_dir=log_dir, ckpt_path="example.ckpt"
+    )
+    assert isinstance(got_config, dict)
+    assert got_log_dir == os.path.join("logs", log_dir)
+
+    # checkpoint path ends with h5
+    with pytest.raises(ValueError):
+        build_config(config_path=config_path, log_dir=log_dir, ckpt_path="example.h5")
 
 
-@pytest.mark.parametrize(
-    "config_paths",
-    [
-        ["config/unpaired_labeled_ddf.yaml"],
-        ["config/unpaired_labeled_ddf.yaml", "config/test/affine.yaml"],
-    ],
-)
-def test_train_and_predict_main(config_paths):
+def test_build_callbacks():
+    """
+    Test build_callbacks by checking the output types
+    """
+    log_dir = "test_build_callbacks"
+    histogram_freq = save_preiod = 1
+    callbacks = build_callbacks(
+        log_dir=log_dir, histogram_freq=histogram_freq, save_period=save_preiod
+    )
+
+    for callback in callbacks:
+        assert isinstance(callback, tf.keras.callbacks.Callback)
+
+
+def test_train_and_predict():
+    """Covered by test_train_and_predict_main"""
+    pass
+
+
+def test_train_and_predict_main():
     """
     Test main in train and predict by checking it can run.
-
-    :param config_paths: list of file paths for configuration.
     """
     train_main(
         args=[
             "--gpu",
             "",
-            "--exp_name",
+            "--log_dir",
             "test_train",
             "--config_path",
+            "config/unpaired_labeled_ddf.yaml",
         ]
-        + config_paths
     )
 
     # check output folders
@@ -84,10 +86,10 @@ def test_train_and_predict_main(config_paths):
             "--gpu",
             "",
             "--ckpt_path",
-            "logs/test_train/save/ckpt-2",
-            "--split",
+            "logs/test_train/save/weights-epoch2.ckpt",
+            "--mode",
             "test",
-            "--exp_name",
+            "--log_dir",
             "test_predict",
             "--save_nifti",
             "--save_png",
@@ -101,6 +103,3 @@ def test_train_and_predict_main(config_paths):
     assert os.path.isfile("logs/test_predict/test/metrics.csv")
     assert os.path.isfile("logs/test_predict/test/metrics_stats_per_label.csv")
     assert os.path.isfile("logs/test_predict/test/metrics_stats_overall.csv")
-
-    shutil.rmtree("logs/test_train")
-    shutil.rmtree("logs/test_predict")

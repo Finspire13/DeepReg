@@ -1,39 +1,35 @@
 """
-Interface between the data loaders and file loaders.
+Interface between the data loaders and file loaders
 """
-
+import logging
 from abc import ABC
-from typing import Dict, List, Optional, Tuple, Union
+from typing import List
 
 import numpy as np
 import tensorflow as tf
 
-from deepreg import log
 from deepreg.dataset.loader.util import normalize_array
-from deepreg.dataset.preprocess import resize_inputs
+from deepreg.dataset.preprocess import AffineTransformation3D, resize_inputs
 from deepreg.dataset.util import get_label_indices
-from deepreg.registry import REGISTRY
-
-logger = log.get(__name__)
 
 
 class DataLoader:
     """
-    loads data to feed to model.
+    loads data to feed to model
     """
 
     def __init__(
         self,
-        labeled: Optional[bool],
-        num_indices: Optional[int],
-        sample_label: Optional[str],
-        seed: Optional[int] = None,
+        labeled: (bool, None),
+        num_indices: (int, None),
+        sample_label: (str, None),
+        seed: (int, None) = None,
     ):
         """
         :param labeled: bool corresponding to labels provided or omitted
-        :param num_indices:
-        :param sample_label:
-        :param seed:
+        :param num_indices : int
+        :param sample_label : (str, None)
+        :param seed : (int, None), optional
         """
         assert labeled in [
             True,
@@ -44,7 +40,7 @@ class DataLoader:
             "sample",
             "all",
             None,
-        ], f"sample_label must be sample, all or None, got {sample_label}"
+        ], f"sample_label must be sample or all or None, got {sample_label}"
         assert (
             num_indices is None or num_indices >= 1
         ), f"num_indices must be int >=1 or None, got {num_indices}"
@@ -60,14 +56,14 @@ class DataLoader:
     @property
     def moving_image_shape(self) -> tuple:
         """
-        needs to be defined by user.
+        needs to be defined by user
         """
         raise NotImplementedError
 
     @property
     def fixed_image_shape(self) -> tuple:
         """
-        needs to be defined by user.
+        needs to be defined by user
         """
         raise NotImplementedError
 
@@ -81,7 +77,7 @@ class DataLoader:
 
     def get_dataset(self) -> tf.data.Dataset:
         """
-        defined in GeneratorDataLoader.
+        defined in GeneratorDataLoader
         """
         raise NotImplementedError
 
@@ -91,27 +87,13 @@ class DataLoader:
         batch_size: int,
         repeat: bool,
         shuffle_buffer_num_batch: int,
-        data_augmentation: Optional[Union[List, Dict]] = None,
-        num_parallel_calls: int = tf.data.experimental.AUTOTUNE,
     ) -> tf.data.Dataset:
         """
-        Generate tf.data.dataset.
+        :param training: bool, indicating if it's training or not
+        :param batch_size: int, size of mini batch
+        :param repeat: bool, indicating if we need to repeat the dataset
+        :param shuffle_buffer_num_batch: int, when shuffling, the shuffle_buffer_size = batch_size * shuffle_buffer_num_batch
 
-        Reference:
-
-            - https://www.tensorflow.org/guide/data_performance#parallelizing_data_transformation
-            - https://www.tensorflow.org/api_docs/python/tf/data/Dataset
-
-        :param training: indicating if it's training or not
-        :param batch_size: size of mini batch
-        :param repeat: indicating if we need to repeat the dataset
-        :param shuffle_buffer_num_batch: when shuffling,
-            the shuffle_buffer_size = batch_size * shuffle_buffer_num_batch
-        :param repeat: indicating if we need to repeat the dataset
-        :param data_augmentation: augmentation config, can be a list of dict or dict.
-        :param num_parallel_calls: number elements to process asynchronously in parallel
-            during preprocessing, -1 means unlimited, heuristically it should be set to
-            the number of CPU cores available. AUTOTUNE=-1 means not limited.
         :returns dataset:
         """
 
@@ -124,7 +106,7 @@ class DataLoader:
                 moving_image_size=self.moving_image_shape,
                 fixed_image_size=self.fixed_image_shape,
             ),
-            num_parallel_calls=num_parallel_calls,
+            num_parallel_calls=tf.data.experimental.AUTOTUNE,
         )
 
         # shuffle / repeat / batch / preprocess
@@ -135,24 +117,19 @@ class DataLoader:
             )
         if repeat:
             dataset = dataset.repeat()
-
         dataset = dataset.batch(batch_size=batch_size, drop_remainder=training)
         dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
-
-        if training and data_augmentation is not None:
-            if isinstance(data_augmentation, dict):
-                data_augmentation = [data_augmentation]
-            for config in data_augmentation:
-                da_fn = REGISTRY.build_data_augmentation(
-                    config=config,
-                    default_args={
-                        "moving_image_size": self.moving_image_shape,
-                        "fixed_image_size": self.fixed_image_shape,
-                        "batch_size": batch_size,
-                    },
-                )
-                dataset = dataset.map(da_fn, num_parallel_calls=num_parallel_calls)
-
+        if training:
+            # TODO add cropping, but crop first or rotation first?
+            affine_transform = AffineTransformation3D(
+                moving_image_size=self.moving_image_shape,
+                fixed_image_size=self.fixed_image_shape,
+                batch_size=batch_size,
+            )
+            dataset = dataset.map(
+                affine_transform.transform,
+                num_parallel_calls=tf.data.experimental.AUTOTUNE,
+            )
         return dataset
 
     def close(self):
@@ -161,25 +138,24 @@ class DataLoader:
 
 class AbstractPairedDataLoader(DataLoader, ABC):
     """
-    Abstract loader for paired data independent of file format.
+    Abstract loader for paried data independent of file format
     """
 
     def __init__(
         self,
-        moving_image_shape: Union[Tuple[int, ...], List[int]],
-        fixed_image_shape: Union[Tuple[int, ...], List[int]],
+        moving_image_shape: (list, tuple),
+        fixed_image_shape: (list, tuple),
         **kwargs,
     ):
         """
         num_indices = 2 corresponding to (image_index, label_index)
         :param moving_image_shape: (width, height, depth)
         :param fixed_image_shape:  (width, height, depth)
-        :param kwargs: additional arguments.
         """
-        super().__init__(num_indices=2, **kwargs)
+        super(AbstractPairedDataLoader, self).__init__(num_indices=2, **kwargs)
         if len(moving_image_shape) != 3 or len(fixed_image_shape) != 3:
             raise ValueError(
-                f"moving_image_shape and fixed_image_shape have length of three, "
+                f"moving_image_shape and fixed_image_shape have to be length of three, "
                 f"corresponding to (width, height, depth), "
                 f"got moving_image_shape = {moving_image_shape} "
                 f"and fixed_image_shape = {fixed_image_shape}"
@@ -210,23 +186,21 @@ class AbstractPairedDataLoader(DataLoader, ABC):
         Return the number of samples in the dataset for one epoch.
         :return: number of images
         """
-        return self.num_images  # type:ignore
+        return self.num_images
 
 
 class AbstractUnpairedDataLoader(DataLoader, ABC):
     """
-    Abstract loader for unparied data independent of file format.
+    Abstract loader for unparied data independent of file format
     """
 
-    def __init__(self, image_shape: Union[Tuple[int, ...], List[int]], **kwargs):
+    def __init__(self, image_shape: (list, tuple), **kwargs):
         """
-        Init.
-
-        :param image_shape: (dim1, dim2, dim3), for unpaired data,
-            moving_image_shape = fixed_image_shape = image_shape
-        :param kwargs: additional arguments.
+        - image_shape is the shape of images fed into dataset,
+        it is assumed to be 3d, [dim1, dim2, dim3]
+          moving_image_shape = fixed_image_shape = image_shape
         """
-        super().__init__(num_indices=3, **kwargs)
+        super(AbstractUnpairedDataLoader, self).__init__(num_indices=3, **kwargs)
         if len(image_shape) != 3:
             raise ValueError(
                 f"image_shape has to be length of three, "
@@ -246,21 +220,16 @@ class AbstractUnpairedDataLoader(DataLoader, ABC):
 
     @property
     def num_samples(self) -> int:
-        return self._num_samples  # type:ignore
+        return self._num_samples
 
 
 class GeneratorDataLoader(DataLoader, ABC):
     """
-    Load samples by implementing get_dataset from DataLoader.
+    handles loading of samples by implementing get_dataset from DataLoader
     """
 
     def __init__(self, **kwargs):
-        """
-        Init.
-
-        :param kwargs: additional arguments.
-        """
-        super().__init__(**kwargs)
+        super(GeneratorDataLoader, self).__init__(**kwargs)
         self.loader_moving_image = None
         self.loader_fixed_image = None
         self.loader_moving_label = None
@@ -268,7 +237,7 @@ class GeneratorDataLoader(DataLoader, ABC):
 
     def get_dataset(self):
         """
-        Return a dataset from the generator.
+        returns a dataset from the generator
         """
         if self.labeled:
             return tf.data.Dataset.from_generator(
@@ -288,21 +257,22 @@ class GeneratorDataLoader(DataLoader, ABC):
                     indices=self.num_indices,
                 ),
             )
-        return tf.data.Dataset.from_generator(
-            generator=self.data_generator,
-            output_types=dict(
-                moving_image=tf.float32, fixed_image=tf.float32, indices=tf.float32
-            ),
-            output_shapes=dict(
-                moving_image=tf.TensorShape([None, None, None]),
-                fixed_image=tf.TensorShape([None, None, None]),
-                indices=self.num_indices,
-            ),
-        )
+        else:
+            return tf.data.Dataset.from_generator(
+                generator=self.data_generator,
+                output_types=dict(
+                    moving_image=tf.float32, fixed_image=tf.float32, indices=tf.float32
+                ),
+                output_shapes=dict(
+                    moving_image=tf.TensorShape([None, None, None]),
+                    fixed_image=tf.TensorShape([None, None, None]),
+                    indices=self.num_indices,
+                ),
+            )
 
     def data_generator(self):
         """
-        Yield samples of data to feed model.
+        yield samples of data to feed model
         """
         for (moving_index, fixed_index, image_indices) in self.sample_index_generator():
             moving_image = self.loader_moving_image.get_data(index=moving_index)
@@ -331,8 +301,9 @@ class GeneratorDataLoader(DataLoader, ABC):
 
     def sample_index_generator(self):
         """
-        Method is defined by the implemented data loaders to yield the sample indexes.
-        Only used in data_generator.
+        this method needs to be defined by the data loaders that are implemented
+        it needs to yield the sample indexes
+        only used in data_generator
         """
         raise NotImplementedError
 
@@ -340,19 +311,17 @@ class GeneratorDataLoader(DataLoader, ABC):
     def validate_images_and_labels(
         moving_image: np.ndarray,
         fixed_image: np.ndarray,
-        moving_label: Optional[np.ndarray],
-        fixed_label: Optional[np.ndarray],
+        moving_label: (np.ndarray, None),
+        fixed_label: (np.ndarray, None),
         image_indices: list,
     ):
         """
-        Check file names match according to naming convention.
-        Only used in sample_image_label.
+        check that all file names match according to naming convention
+        only used in sample_image_label
         :param moving_image: np.ndarray of shape (m_dim1, m_dim2, m_dim3)
         :param fixed_image: np.ndarray of shape (f_dim1, f_dim2, f_dim3)
-        :param moving_label: np.ndarray of shape (m_dim1, m_dim2, m_dim3)
-            or (m_dim1, m_dim2, m_dim3, num_labels)
-        :param fixed_label: np.ndarray of shape (f_dim1, f_dim2, f_dim3)
-            or (f_dim1, f_dim2, f_dim3, num_labels)
+        :param moving_label: np.ndarray of shape (m_dim1, m_dim2, m_dim3) or (m_dim1, m_dim2, m_dim3, num_labels) or None
+        :param fixed_label: np.ndarray of shape (f_dim1, f_dim2, f_dim3) or (f_dim1, f_dim2, f_dim3, num_labels) or None
         :param image_indices: list
         """
         # images should never be None, and labels should all be non-None or None
@@ -372,16 +341,14 @@ class GeneratorDataLoader(DataLoader, ABC):
             if np.min(arr) < 0 or np.max(arr) > 1:
                 raise ValueError(
                     f"Sample {image_indices}'s {name}'s values are not between [0, 1]. "
-                    f"Its minimum value is {np.min(arr)} "
-                    f"and its maximum value is {np.max(arr)}.\n"
+                    f"Its minimum value is {np.min(arr)} and its maximum value is {np.max(arr)}.\n"
                     f"The images are automatically normalized on image level: "
                     f"x = (x - min(x) + EPS) / (max(x) - min(x) + EPS). \n"
-                    f"Labels are assumed to have values between [0,1] "
-                    f"and they are not normalised. "
+                    f"Labels are assumed to have values between [0,1] and they are not normalised. "
                     f"This is to prevent accidental use of other encoding methods "
                     f"other than one-hot to represent multiple class labels.\n"
                     f"If the label values are intended to represent multiple labels, "
-                    f"convert them to one hot / binary masks in multiple channels, "
+                    f"please convert them to one hot / binary masks in multiple channels, "
                     f"with each channel representing one label only.\n"
                     f"Please read the dataset requirements section "
                     f"in docs/doc_data_loader.md for more detailed information."
@@ -390,36 +357,32 @@ class GeneratorDataLoader(DataLoader, ABC):
         for arr, name in zip(
             [moving_image, fixed_image], ["moving_image", "fixed_image"]
         ):
-            if len(arr.shape) != 3 or min(arr.shape) <= 0:
+            if len(arr.shape) != 3:
                 raise ValueError(
-                    f"Sample {image_indices}'s {name}'s shape should be 3D"
-                    f" and non-empty, got {arr.shape}."
+                    f"Sample {image_indices}'s {name}' shape should have dimension of 3. "
+                    f"Got {arr.shape}."
                 )
         # when data are labeled
-        if moving_label is not None and fixed_label is not None:
+        if moving_label is not None:
             # labels should be 3D or 4D arrays
             for arr, name in zip(
                 [moving_label, fixed_label], ["moving_label", "fixed_label"]
             ):
                 if len(arr.shape) not in [3, 4]:
                     raise ValueError(
-                        f"Sample {image_indices}'s {name}'s shape should be 3D or 4D. "
+                        f"Sample {image_indices}'s {name}' shape should have dimension of 3 or 4. "
                         f"Got {arr.shape}."
                     )
             # image and label is better to have the same shape
-            if moving_image.shape[:3] != moving_label.shape[:3]:  # pragma: no cover
-                logger.warning(
-                    f"Sample {image_indices}'s moving image and label "
-                    f"have different shapes. "
-                    f"moving_image.shape = {moving_image.shape}, "
-                    f"moving_label.shape = {moving_label.shape}"
+            if moving_image.shape[:3] != moving_label.shape[:3]:
+                logging.warning(
+                    f"Sample {image_indices}'s moving image and label have different shapes. "
+                    f"moving_image.shape = {moving_image.shape}, moving_label.shape = {moving_label.shape}"
                 )
-            if fixed_image.shape[:3] != fixed_label.shape[:3]:  # pragma: no cover
-                logger.warning(
-                    f"Sample {image_indices}'s fixed image and label "
-                    f"have different shapes. "
-                    f"fixed_image.shape = {fixed_image.shape}, "
-                    f"fixed_label.shape = {fixed_label.shape}"
+            if fixed_image.shape[:3] != fixed_label.shape[:3]:
+                logging.warning(
+                    f"Sample {image_indices}'s fixed image and label have different shapes. "
+                    f"fixed_image.shape = {fixed_image.shape}, fixed_label.shape = {fixed_label.shape}"
                 )
             # number of labels for fixed and fixed images should be the same
             num_labels_moving = (
@@ -430,8 +393,7 @@ class GeneratorDataLoader(DataLoader, ABC):
             )
             if num_labels_moving != num_labels_fixed:
                 raise ValueError(
-                    f"Sample {image_indices}'s moving image and fixed image "
-                    f"have different numbers of labels. "
+                    f"Sample {image_indices}'s moving image and fixed image have different numbers of labels. "
                     f"moving: {num_labels_moving}, fixed: {num_labels_fixed}"
                 )
 
@@ -439,24 +401,24 @@ class GeneratorDataLoader(DataLoader, ABC):
         self,
         moving_image: np.ndarray,
         fixed_image: np.ndarray,
-        moving_label: Optional[np.ndarray],
-        fixed_label: Optional[np.ndarray],
+        moving_label: (np.ndarray, None),
+        fixed_label: (np.ndarray, None),
         image_indices: list,
     ):
         """
-        Sample the image labels, only used in data_generator.
-
-        :param moving_image:
-        :param fixed_image:
-        :param moving_label:
-        :param fixed_label:
-        :param image_indices:
+        sample the image labels
+        only used in data_generator
+        :param moving_image : np.ndarray
+        :param fixed_image : np.ndarray
+        :param moving_label : (np.ndarray, None)
+        :param fixed_label : (np.ndarray, None)
+        :param image_indices : list
         """
         self.validate_images_and_labels(
             moving_image, fixed_image, moving_label, fixed_label, image_indices
         )
         # unlabeled
-        if moving_label is None or fixed_label is None:
+        if moving_label is None:
             label_index = -1  # means no label
             indices = np.asarray(image_indices + [label_index], dtype=np.float32)
             yield dict(
@@ -466,7 +428,7 @@ class GeneratorDataLoader(DataLoader, ABC):
             # labeled
             if len(moving_label.shape) == 4:  # multiple labels
                 label_indices = get_label_indices(
-                    moving_label.shape[3], self.sample_label  # type:ignore
+                    moving_label.shape[3], self.sample_label
                 )
                 for label_index in label_indices:
                     indices = np.asarray(
@@ -493,7 +455,7 @@ class GeneratorDataLoader(DataLoader, ABC):
 
 class FileLoader:
     """
-    Interface / abstract class to load data from multiple directories.
+    Interface / abstract class to load data from multiple directories
     """
 
     def __init__(self, dir_paths: list, name: str, grouped: bool):
@@ -510,12 +472,14 @@ class FileLoader:
         self.dir_paths = dir_paths
         self.name = name
         self.grouped = grouped
-        # if grouped, group_struct[group_index] = list of data_index
-        self.group_struct = None
+        if self.grouped:
+            # group_struct[group_index] = list of data_index
+            self.group_struct = None
 
     def set_data_structure(self):
         """
-        Store the data structure in memory to retrieve data using data_index.
+        Store the data structure in the memory so that
+        we can retrieve data using data_index
         """
         raise NotImplementedError
 
@@ -529,21 +493,20 @@ class FileLoader:
         """
         raise NotImplementedError
 
-    def get_data(self, index: Union[int, Tuple[int, ...]]) -> np.ndarray:
+    def get_data(self, index: (int, tuple)):
         """
         Get one data array by specifying an index.
 
         :param index: the data index which is required
 
           - for paired or unpaired, the index is one single int, data_index
-          - for grouped, the index is a tuple of two ints,
-            (group_index, in_group_data_index)
+          - for grouped, the index is a tuple of two ints, (group_index, in_group_data_index)
 
         :return: the data array at the specified index
         """
         raise NotImplementedError
 
-    def get_data_ids(self) -> List:
+    def get_data_ids(self):
         """
         Return the unique IDs of the data in this data set.
         This function is used to verify the consistency between
@@ -565,7 +528,7 @@ class FileLoader:
 
         :return: int, number of groups in this data set, if grouped
         """
-        assert self.group_struct is not None
+        assert self.grouped
         return len(self.group_struct)
 
     def get_num_images_per_group(self) -> List[int]:
@@ -575,7 +538,7 @@ class FileLoader:
 
         :return: a list of integers, representing the number of images in each group.
         """
-        assert self.group_struct is not None
+        assert self.grouped
         num_images_per_group = [len(group) for group in self.group_struct]
         if min(num_images_per_group) == 0:
             group_ids = [

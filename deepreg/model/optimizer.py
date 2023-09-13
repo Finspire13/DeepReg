@@ -5,15 +5,23 @@ Functions parsing the config optimizer options
 import tensorflow as tf
 
 
-def build_optimizer(optimizer_config: dict) -> tf.optimizers.Optimizer:
+def build_optimizer(optimizer_config: dict):
     """
     Parsing the optimiser options and parameters
     from config dictionary.
 
-    :param optimizer_config: has key name and other required arguments
-    :return: optimizer instant
+    :param optimizer_config: unpacked dictionary for
+      the optimiser returned from yaml.load, optimiser options
+      and parameters
+    :return: tf.keras.optimizers object
     """
+    assert isinstance(optimizer_config, dict)
 
-    optimizer_cls = getattr(tf.keras.optimizers, optimizer_config["name"])
-    optimizer = optimizer_cls(**optimizer_config)
-    return optimizer
+    if optimizer_config["name"] == "adam":
+        return tf.keras.optimizers.Adam(**optimizer_config["adam"])
+    elif optimizer_config["name"] == "sgd":
+        return tf.keras.optimizers.SGD(**optimizer_config["sgd"])
+    elif optimizer_config["name"] == "rms":
+        return tf.keras.optimizers.RMSprop(**optimizer_config["rms"])
+    else:
+        raise ValueError("Unknown optimizer")

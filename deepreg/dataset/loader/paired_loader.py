@@ -1,25 +1,24 @@
 """
-Load paired image data.
-Supported formats: h5 and Nifti.
-Image data can be labeled or unlabeled.
+Loads paired image data
+supports h5 and Nifti formats
+supports labeled and unlabeled data
 """
 import random
-from typing import List, Tuple, Union
+from typing import List
 
 from deepreg.dataset.loader.interface import (
     AbstractPairedDataLoader,
     GeneratorDataLoader,
 )
 from deepreg.dataset.util import check_difference_between_two_lists
-from deepreg.registry import REGISTRY
 
 
-@REGISTRY.register_data_loader(name="paired")
 class PairedDataLoader(AbstractPairedDataLoader, GeneratorDataLoader):
     """
-    Load paired data using given file loader.
+    Loads paired data using given file loader
+    Handles both labeled and unlabeled cases
     The function sample_index_generator needs to be defined for the
-    GeneratorDataLoader class.
+    GeneratorDataLoader class
     """
 
     def __init__(
@@ -29,8 +28,8 @@ class PairedDataLoader(AbstractPairedDataLoader, GeneratorDataLoader):
         labeled: bool,
         sample_label: str,
         seed,
-        moving_image_shape: Union[Tuple[int, ...], List[int]],
-        fixed_image_shape: Union[Tuple[int, ...], List[int]],
+        moving_image_shape: (list, tuple),
+        fixed_image_shape: (list, tuple),
     ):
         """
         :param file_loader:
@@ -44,7 +43,7 @@ class PairedDataLoader(AbstractPairedDataLoader, GeneratorDataLoader):
         :param moving_image_shape: (width, height, depth)
         :param fixed_image_shape: (width, height, depth)
         """
-        super().__init__(
+        super(PairedDataLoader, self).__init__(
             moving_image_shape=moving_image_shape,
             fixed_image_shape=fixed_image_shape,
             labeled=labeled,
@@ -77,7 +76,7 @@ class PairedDataLoader(AbstractPairedDataLoader, GeneratorDataLoader):
         self.num_images = self.loader_moving_image.get_num_images()
 
     def validate_data_files(self):
-        """Verify all loaders have the same files."""
+        """Verify all loaders have the same files"""
         moving_image_ids = self.loader_moving_image.get_data_ids()
         fixed_image_ids = self.loader_fixed_image.get_data_ids()
         check_difference_between_two_lists(
@@ -102,7 +101,7 @@ class PairedDataLoader(AbstractPairedDataLoader, GeneratorDataLoader):
     def sample_index_generator(self):
         """
         Generate indexes in order to load data using the
-        GeneratorDataLoader class.
+        GeneratorDataLoader class
         """
         image_indices = [i for i in range(self.num_images)]
         random.Random(self.seed).shuffle(image_indices)

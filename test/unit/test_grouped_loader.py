@@ -3,7 +3,6 @@ Tests for deepreg/dataset/loader/grouped_loader.py in
 pytest style
 """
 from os.path import join
-from typing import List
 
 import numpy as np
 import pytest
@@ -17,25 +16,19 @@ DataPaths = dict(nifti="data/test/nifti/grouped", h5="data/test/h5/grouped")
 image_shape = (64, 64, 60)
 
 
-def sample_count(ni: List[int], direction: str) -> int:
-    """
-    Count number of samples.
-
-    :param ni: list, each element correspond to the number of images per group
-    :param direction: unconstrained/forward/backward
-    :return: number of samples in total
-    """
-    arr = np.array(ni)
+def sample_count(ni, direction):
+    """helper function calculates number of samples"""
+    ni = np.array(ni)
     if direction == "unconstrained":
-        sample_total = np.sum(arr * (arr - 1))
+        sample_total = sum(ni * (ni - 1))
     else:
-        sample_total = np.sum(arr * (arr - 1) / 2)
+        sample_total = sum(ni * (ni - 1) / 2)
     return int(sample_total)
 
 
 def test_init():
     """
-    Test exceptions with appropriate messages and counts samples correctly
+    Test __init__ catches exceptions with appropriate messages and counts samples correctly
     """
     for key_file_loader, file_loader in FileLoaderDict.items():
         for train_split in ["test", "train"]:
@@ -52,8 +45,8 @@ def test_init():
                         seed=None,
                     )
                     if train_split == "test" and prob < 1:
-                        # sample with fewer than 2 groups.
-                        # In "test" we only have one group
+                        # catch exception when trying to sample between fewer than 2 groups. In "test" we only have one
+                        # group
                         with pytest.raises(ValueError) as err_info:
                             data_loader = GroupedDataLoader(
                                 data_dir_paths=data_dir_paths,
@@ -64,8 +57,7 @@ def test_init():
                         assert "we need at least two groups" in str(err_info.value)
 
                     elif train_split == "train" and sample_in_group is True:
-                        # ensure sample count is accurate
-                        # (only for train dir, test dir uses same logic)
+                        # ensure sample count is accurate (only for train dir, test dir uses same logic)
                         data_loader = GroupedDataLoader(
                             data_dir_paths=data_dir_paths,
                             image_shape=image_shape,
@@ -76,7 +68,7 @@ def test_init():
                         data_loader.close()
 
                     elif sample_in_group is False and 0 < prob < 1:
-                        # specifying conflicting intra/inter group parameters
+                        # catch exception when specifying conflicting intra/inter group parameters
                         with pytest.raises(ValueError) as err_info:
                             data_loader = GroupedDataLoader(
                                 data_dir_paths=data_dir_paths,
@@ -91,8 +83,7 @@ def test_init():
 
 def test_validate_data_files():
     """
-    Test validate_data_files function looks for inconsistencies
-     in the fixed/moving image and label lists.
+    Test validate_data_files function looks for inconsistencies in the fixed/moving image and label lists.
     If there is any issue it will raise an error, otherwise it returns None.
     """
     for key_file_loader, file_loader in FileLoaderDict.items():

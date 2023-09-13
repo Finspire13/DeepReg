@@ -3,7 +3,7 @@
 This is a set of simple tests to use DeepReg command line tools. More details and other
 options can be found in [Command Line Tools](../docs/cli.html).
 
-First, [install DeepReg](install.html) and change current directory to the root
+First, [install DeepReg](../docs/install.html) and change current directory to the root
 directory of DeepReg.
 
 ## Train a registration network
@@ -12,7 +12,7 @@ Train a registration network using unpaired and labeled example data with a pred
 configuration:
 
 ```bash
-deepreg_train --gpu "" --config_path config/unpaired_labeled_ddf.yaml --exp_name test
+deepreg_train --gpu "" --config_path config/unpaired_labeled_ddf.yaml --log_dir test
 ```
 
 where:
@@ -27,13 +27,13 @@ where:
 Once trained, evaluate the network using a test dataset:
 
 ```bash
-deepreg_predict --gpu "" --ckpt_path logs/test/save/ckpt-2 --split test
+deepreg_predict --gpu "" --ckpt_path logs/test/save/weights-epoch2.ckpt --mode test
 ```
 
 where:
 
 - `--ckpt_path <filepath>` specifies the checkpoint file path.
-- `--split test` specifies prediction on the test dataset.
+- `--mode test` specifies prediction on the test dataset.
 
 ## Warp an image
 

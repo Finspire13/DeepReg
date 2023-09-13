@@ -22,59 +22,35 @@ intra-/post-treatment.
 
 ## Data
 
-Data is
-[an example CT volume](https://wiki.cancerimagingarchive.net/display/Public/Head-Neck-PET-CT)
-with two labels.
+https://wiki.cancerimagingarchive.net/display/Public/Head-Neck-PET-CT
 
 ## Instruction
 
-### Installation
-
-Please install DeepReg following the [instructions](../getting_started/install.html) and
-change the current directory to the root directory of DeepReg project, i.e. `DeepReg/`.
-
-### Download data
-
-Please execute the following command to download and pre-process the data.
+- Change current directory to the root directory of DeepReg project;
+- Run `demo_data.py` script to download an example CT volumes with two labels;
 
 ```bash
 python demos/classical_ct_headneck_affine/demo_data.py
 ```
 
-### Launch registration
-
-Please execute the following command to register two images. The fixed image will be the
-downloaded data and the moving image will be simulated by applying a random affine
-transformation, such that the ground-truth is available for. The optimised
-transformation will be applied to the moving images, as well as the moving labels. The
-results, saved in a timestamped folder under the project directory, will compare the
-warped image/labels with the ground-truth image/labels.
+- Run `demo_register.py` script. This script will register two images. The fixed image
+  will be the downloaded data and the moving image will be simulated by applying a
+  random affine transformation, such that the ground-truth is available for. The
+  optimised transformation will be applied to the moving images, as well as the moving
+  labels. The results, saved in a timestamped folder under the project directory, will
+  compare the warped image/labels with the ground-truth image/labels.
 
 ```bash
 python demos/classical_ct_headneck_affine/demo_register.py
 ```
 
-## Visualise
+## Tested DeepReg version
 
-The following command can be executed to generate a plot of three image slices from the
-the moving image, warped image and fixed image (left to right) to visualise the
-registration. Please see the visualisation tool docs
-[here](https://github.com/DeepRegNet/DeepReg/blob/main/docs/source/docs/visualisation_tool.md)
-for more visualisation options such as animated gifs.
-
-```bash
-deepreg_vis -m 2 -i 'demos/classical_ct_headneck_affine/logs_reg/moving_image.nii.gz, demos/classical_ct_headneck_affine/logs_reg/warped_moving_image.nii.gz, demos/classical_ct_headneck_affine/logs_reg/fixed_image.nii.gz' --slice-inds '4,8,12' -s demos/classical_ct_headneck_affine/logs_reg
-```
-
-Note: The registration script must be run before running the command to generate the
-visualisation.
-
-![plot](../assets/classical_ct_headneck_affine.png)
+0.1.0
 
 ## Contact
 
-Please [raise an issue](https://github.com/DeepRegNet/DeepReg/issues/new/choose) for any
-questions.
+Please [raise an issue](https://github.com/DeepRegNet/DeepReg/issues/new/choose).
 
 ## Reference
 

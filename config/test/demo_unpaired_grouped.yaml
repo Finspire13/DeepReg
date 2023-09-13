@@ -1,5 +1,0 @@
-dataset:
-  image_shape: [16, 16, 16]
-train:
-  epochs: 1
-  save_period: 1

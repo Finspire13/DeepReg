@@ -8,12 +8,7 @@ import pytest
 import yaml
 from testfixtures import TempDirectory
 
-from deepreg.config.parser import (
-    config_sanity_check,
-    load_configs,
-    save,
-    update_nested_dict,
-)
+from deepreg.parser import config_sanity_check, load_configs, save, update_nested_dict
 
 
 def test_update_nested_dict():
@@ -72,33 +67,28 @@ def test_update_nested_dict():
     assert got == expected
 
 
-class TestLoadConfigs:
-    def test_single_config(self):
-        with open("config/unpaired_labeled_ddf.yaml") as file:
-            expected = yaml.load(file, Loader=yaml.FullLoader)
-        got = load_configs("config/unpaired_labeled_ddf.yaml")
-        assert got == expected
+def test_load_configs():
+    """
+    test load_configs by checking outputs
+    """
+    # single config
+    # input is str not list
+    with open("config/unpaired_labeled_ddf.yaml") as file:
+        expected = yaml.load(file, Loader=yaml.FullLoader)
+    got = load_configs("config/unpaired_labeled_ddf.yaml")
+    assert got == expected
 
-    def test_multiple_configs(self):
-        with open("config/unpaired_labeled_ddf.yaml") as file:
-            expected = yaml.load(file, Loader=yaml.FullLoader)
-        got = load_configs(
-            config_path=[
-                "config/test/ddf.yaml",
-                "config/test/unpaired_nifti.yaml",
-                "config/test/labeled.yaml",
-            ]
-        )
-        assert got == expected
-
-    def test_outdated_config(self):
-        with open("demos/grouped_mr_heart/grouped_mr_heart.yaml") as file:
-            expected = yaml.load(file, Loader=yaml.FullLoader)
-        got = load_configs("config/test/grouped_mr_heart_v011.yaml")
-        assert got == expected
-        updated_file_path = "config/test/updated_grouped_mr_heart_v011.yaml"
-        assert os.path.isfile(updated_file_path)
-        os.remove(updated_file_path)
+    # multiple configs
+    with open("config/unpaired_labeled_ddf.yaml") as file:
+        expected = yaml.load(file, Loader=yaml.FullLoader)
+    got = load_configs(
+        config_path=[
+            "config/test/ddf.yaml",
+            "config/test/unpaired_nifti.yaml",
+            "config/test/labeled.yaml",
+        ]
+    )
+    assert got == expected
 
 
 def test_save():
@@ -119,28 +109,91 @@ def test_save():
             save(config=dict(x=1), out_dir=tempdir.path, filename="test.txt")
 
 
-class TestConfigSanityCheck:
-    def test_cond_err(self):
-        """Test error message for conditional model."""
-        wrong_config = {
-            "dataset": {
-                "train": {
-                    "dir": "",
-                    "labeled": False,
-                    "format": "h5",
-                },
-                "type": "paired",
-            },
-            "train": {
-                "method": "conditional",
-                "loss": {},
-                "preprocess": {},
-                "optimizer": {"name": "Adam"},
-            },
-        }
-        with pytest.raises(ValueError) as err_info:
-            config_sanity_check(config=wrong_config)
-        assert (
-            "For conditional model, data have to be labeled, got unlabeled data."
-            in str(err_info.value)
+def test_config_sanity_check(caplog):
+    """test config_sanity_check by check error messages"""
+    # dataset is not in the key
+    with pytest.raises(AssertionError):
+        config_sanity_check(config=dict())
+
+    # unknown data type
+    with pytest.raises(ValueError) as err_info:
+        config_sanity_check(config=dict(dataset=dict(type="type")))
+    assert "data type must be paired / unpaired / grouped" in str(err_info.value)
+
+    # unknown data format
+    with pytest.raises(ValueError) as err_info:
+        config_sanity_check(config=dict(dataset=dict(type="paired", format="format")))
+    assert "data format must be nifti / h5" in str(err_info.value)
+
+    # dir is not in data_config
+    with pytest.raises(AssertionError):
+        config_sanity_check(config=dict(dataset=dict(type="paired", format="h5")))
+
+    # dir doesn't have train/valid/test
+    with pytest.raises(AssertionError):
+        config_sanity_check(
+            config=dict(dataset=dict(type="paired", format="h5", dir=dict()))
         )
+
+    # train/valid/test of dir is not string or list of string
+    with pytest.raises(ValueError) as err_info:
+        config_sanity_check(
+            config=dict(
+                dataset=dict(
+                    type="paired",
+                    format="h5",
+                    dir=dict(train=1, valid=None, test=None),
+                    labeled=True,
+                ),
+                train=dict(model=dict(method="ddf")),
+            )
+        )
+    assert "data_dir for mode train must be string or list of strings" in str(
+        err_info.value
+    )
+
+    # use unlabeled data for conditional model
+    with pytest.raises(ValueError) as err_info:
+        config_sanity_check(
+            config=dict(
+                dataset=dict(
+                    type="paired",
+                    format="h5",
+                    dir=dict(train=None, valid=None, test=None),
+                    labeled=False,
+                ),
+                train=dict(model=dict(method="conditional")),
+            )
+        )
+    assert "For conditional model, data have to be labeled, got unlabeled data." in str(
+        err_info.value
+    )
+
+    # check warnings
+    # train/valid/test of dir is None
+    # all loss weight <= 0
+    caplog.clear()  # clear previous log
+    config_sanity_check(
+        config=dict(
+            dataset=dict(
+                type="paired",
+                format="h5",
+                dir=dict(train=None, valid=None, test=None),
+                labeled=False,
+            ),
+            train=dict(
+                model=dict(method="ddf"),
+                loss=dict(
+                    dissimilarity=dict(image=dict(weight=0.0), label=dict(weight=0.0)),
+                    regularization=dict(weight=0.0),
+                ),
+            ),
+        )
+    )
+    # warning messages can be detected together
+    assert "Data directory for train is not defined." in caplog.text
+    assert "Data directory for valid is not defined." in caplog.text
+    assert "Data directory for test is not defined." in caplog.text
+    assert "The image loss 0.0 is not positive." in caplog.text
+    assert "The label loss 0.0 is not positive." in caplog.text
+    assert "The regularization loss 0.0 is not positive." in caplog.text

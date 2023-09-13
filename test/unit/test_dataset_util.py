@@ -50,7 +50,7 @@ def test_sorted_h5_keys_many():
 
 def test_get_sorted_file_paths_in_dir_with_suffix():
     """
-    Checking sorted file names returned
+    Checking sorted file names returned by get_sorted_file_paths_in_dir_with_suffix function
     """
 
     # one dir, single suffix
@@ -144,6 +144,15 @@ def test_label_indices_sample():
     expected = {0, 1, 2, 3}
     actual = util.get_label_indices(4, "sample")
     assert expected.intersection(set(actual))
+
+
+def test_label_indices_first():
+    """
+    Assert list with 0 raised if first sample label
+    """
+    expected = [0]
+    actual = util.get_label_indices(5, "first")
+    assert expected == actual
 
 
 def test_label_indices_all():

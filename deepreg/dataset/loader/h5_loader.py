@@ -1,43 +1,36 @@
 """
-Load h5 files and associated information.
+Loads h5 files and some associated information
 """
 import os
-from typing import List, Tuple, Union
+from typing import List
 
 import h5py
 import numpy as np
 
 from deepreg.dataset.loader.interface import FileLoader
-from deepreg.registry import REGISTRY
 
 DATA_KEY_FORMAT = "group-{}-{}"
 
 
-@REGISTRY.register_file_loader(name="h5")
 class H5FileLoader(FileLoader):
-    """Generalized loader for h5 files."""
+    """Generalized loader for h5 files"""
 
     def __init__(self, dir_paths: List[str], name: str, grouped: bool):
-        """
-        Init.
-
-        :param dir_paths: path of h5 files.
-        :param name: name is used to identify the file names.
-        :param grouped: whether the data is grouped.
-        """
-        super().__init__(dir_paths=dir_paths, name=name, grouped=grouped)
+        super(H5FileLoader, self).__init__(
+            dir_paths=dir_paths, name=name, grouped=grouped
+        )
         self.h5_files = None
         self.data_path_splits = None
         self.set_data_structure()
-        self.group_struct = None
         if self.grouped:
+            self.group_struct = None
             self.set_group_structure()
 
     def set_data_structure(self):
         """
-        Store the data structure in  memory so that
-        we can retrieve data using data_index.
-        This function sets two attributes:
+        Store the data structure in the memory so that
+        we can retrieve data using data_index
+        this function sets two attributes
 
         - h5_files, a dict such that h5_files[dir_path] = opened h5 file handle
         - data_path_splits, a list of string tuples to identify path of data
@@ -47,7 +40,7 @@ class H5FileLoader(FileLoader):
           - if not grouped, a split is (dir_path, data_key) such that
             data = h5_files[dir_path][data_key]
         """
-        h5_files = {}
+        h5_files = dict()
         data_path_splits = []
         for dir_path in self.dir_paths:
             h5_file_path = os.path.join(dir_path, self.name + ".h5")
@@ -68,25 +61,22 @@ class H5FileLoader(FileLoader):
             else:
                 # each element is (dir_path, data_key)
                 data_path_splits += [(dir_path, k) for k in sorted(h5_file.keys())]
-        if len(data_path_splits) == 0:
-            raise ValueError(
-                f"No data collected from {self.dir_paths} in H5FileLoader, "
-                f"please verify the path is correct."
-            )
         self.h5_files = h5_files
         self.data_path_splits = data_path_splits
 
     def set_group_structure(self):
         """
-        Similar to NiftiLoader
-        as the first two tokens of a split forms a group_id.
-        Store the group structure in group_struct so that
-        group_struct[group_index] = list of data_index.
-        Retrieve data using (group_index, in_group_data_index).
-        data_index = group_struct[group_index][in_group_data_index].
+        Same code as NiftiLoader,
+        as the first two tokens of a split forms a group_id
+
+        In addition to set_data_structure
+        store the group structure in the group_struct so that
+        group_struct[group_index] = list of data_index
+        we can retrieve data using (group_index, in_group_data_index)
+        data_index = group_struct[group_index][in_group_data_index]
         """
         # group_struct_dict[group_id] = list of data_index
-        group_struct_dict = {}
+        group_struct_dict = dict()
         for data_index, split in enumerate(self.data_path_splits):
             group_id = split[:2]
             if group_id not in group_struct_dict.keys():
@@ -98,18 +88,16 @@ class H5FileLoader(FileLoader):
             group_struct.append(group_struct_dict[k])
         self.group_struct = group_struct
 
-    def get_data(self, index: Union[int, Tuple[int, ...]]) -> np.ndarray:
+    def get_data(self, index: (int, tuple)) -> np.ndarray:
         """
         Get one data array by specifying an index
 
         :param index: the data index which is required
 
           - for paired or unpaired, the index is one single int, data_index
-          - for grouped, the index is a tuple of two ints,
-            (group_index, in_group_data_index)
+          - for grouped, the index is a tuple of two ints, (group_index, in_group_data_index)
         :returns arr: the data array at the specified index
         """
-        assert self.data_path_splits is not None
         if isinstance(index, int):  # paired or unpaired
             assert not self.grouped
             assert 0 <= index
@@ -130,28 +118,26 @@ class H5FileLoader(FileLoader):
         arr = np.asarray(self.h5_files[dir_path][data_key], dtype=np.float32)
         if len(arr.shape) == 4 and arr.shape[3] == 1:
             # for labels, if there's only one label, remove the last dimension
-            # currently have not encountered
-            arr = arr[:, :, :, 0]  # pragma: no cover
+            arr = arr[:, :, :, 0]
         return arr
 
-    def get_data_ids(self) -> List:
+    def get_data_ids(self):
         """
-        Get the unique IDs of data in this data set to
-        verify consistency between
-        images and label, moving and fixed.
+        Return the unique IDs of the data in this data set
+        this function is used to verify the consistency between
+        images and label, moving and fixed
 
-        :return: data_path_splits as the data can be identified
-            using dir_path and data_key
+        :return: data_path_splits as the data can be identified using dir_path and data_key
         """
-        return self.data_path_splits  # type: ignore
+        return self.data_path_splits
 
     def get_num_images(self) -> int:
         """
         :return: int, number of images in this data set
         """
-        return len(self.data_path_splits)  # type: ignore
+        return len(self.data_path_splits)
 
     def close(self):
-        """Close opened h5 file handles."""
+        """Close opened h5 file handles"""
         for f in self.h5_files.values():
             f.close()

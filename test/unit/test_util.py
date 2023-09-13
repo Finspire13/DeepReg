@@ -2,7 +2,6 @@ import os
 import re
 import shutil
 from test.unit.util import is_equal_np
-from typing import Tuple
 
 import nibabel as nib
 import numpy as np
@@ -28,20 +27,19 @@ def test_build_dataset():
 
     # init arguments
     config_path = "config/unpaired_labeled_ddf.yaml"
-    log_dir = "logs"
-    exp_name = "test_build_dataset"
+    log_dir = "test_build_dataset"
     ckpt_path = ""
 
     # load config
-    config, _, _ = build_config(
-        config_path=config_path, log_dir=log_dir, exp_name=exp_name, ckpt_path=ckpt_path
+    config, log_dir = build_config(
+        config_path=config_path, log_dir=log_dir, ckpt_path=ckpt_path
     )
 
     # build dataset
     data_loader_train, dataset_train, steps_per_epoch_train = build_dataset(
         dataset_config=config["dataset"],
         preprocess_config=config["train"]["preprocess"],
-        split="train",
+        mode="train",
         training=False,
         repeat=False,
     )
@@ -52,13 +50,13 @@ def test_build_dataset():
     assert isinstance(steps_per_epoch_train, int)
 
     # remove valid data
-    config["dataset"]["valid"]["dir"] = ""
+    config["dataset"]["dir"]["valid"] = ""
 
     # build dataset
     data_loader_valid, dataset_valid, steps_per_epoch_valid = build_dataset(
         dataset_config=config["dataset"],
         preprocess_config=config["train"]["preprocess"],
-        split="valid",
+        mode="valid",
         training=False,
         repeat=False,
     )
@@ -68,117 +66,133 @@ def test_build_dataset():
     assert steps_per_epoch_valid is None
 
 
-@pytest.mark.parametrize("log_dir,exp_name", [("logs", ""), ("logs", "custom")])
-def test_build_log_dir(log_dir: str, exp_name: str):
-    built_log_dir = build_log_dir(log_dir=log_dir, exp_name=exp_name)
-    head, tail = os.path.split(built_log_dir)
-    assert head == log_dir
-    if exp_name == "":
-        # use default timestamp based directory
-        pattern = re.compile("[0-9]{8}-[0-9]{6}")
-        assert pattern.match(tail)
-    else:
-        # use custom directory
-        assert tail == exp_name
+def test_build_log_dir():
+    """
+    Test build_log_dir for default directory and custom directory
+    """
+
+    # use default timestamp based directory
+    log_dir = build_log_dir(log_dir="")
+    head, tail = os.path.split(log_dir)
+    assert head == "logs"
+    pattern = re.compile("[0-9]{8}-[0-9]{6}")
+    assert pattern.match(tail)
+
+    # use custom directory
+    log_dir = build_log_dir(log_dir="custom")
+    head, tail = os.path.split(log_dir)
+    assert head == "logs"
+    assert tail == "custom"
 
 
-class TestSaveArray:
+def test_save_array():
+    """
+    Test save_array by testing different shapes and count output files
+    """
+
+    def get_num_pngs_in_dir(dir_paths):
+        return len([x for x in os.listdir(dir_paths) if x.endswith(".png")])
+
+    def get_num_niftis_in_dir(dir_paths):
+        return len([x for x in os.listdir(dir_paths) if x.endswith(".nii.gz")])
+
     save_dir = "logs/test_util_save_array"
-    arr_name = "arr"
-    png_dir = os.path.join(save_dir, arr_name)
-    dim_err_msg = "arr must be 3d or 4d numpy array or tf tensor"
-    ch_err_msg = "4d arr must have 3 channels as last dimension"
+    if os.path.exists(save_dir):
+        shutil.rmtree(save_dir)
 
-    def setup_method(self, method):
-        if os.path.exists(self.save_dir):
-            shutil.rmtree(self.save_dir)
+    # test 3D tf tensor
+    name = "3d_tf"
+    out_dir = os.path.join(save_dir, name)
+    arr = tf.random.uniform(shape=(2, 3, 4))
+    save_array(save_dir=save_dir, arr=arr, name=name, gray=True)
+    assert get_num_pngs_in_dir(out_dir) == 4
+    assert get_num_niftis_in_dir(save_dir) == 1
+    shutil.rmtree(out_dir)
+    os.remove(os.path.join(save_dir, name + ".nii.gz"))
 
-    def teardown_method(self, method):
-        if os.path.exists(self.save_dir):
-            shutil.rmtree(self.save_dir)
+    # test 4D tf tensor
+    name = "4d_tf"
+    out_dir = os.path.join(save_dir, name)
+    arr = tf.random.uniform(shape=(2, 3, 4, 3))
+    save_array(save_dir=save_dir, arr=arr, name=name, gray=True)
+    assert get_num_pngs_in_dir(out_dir) == 4
+    assert get_num_niftis_in_dir(save_dir) == 1
+    shutil.rmtree(out_dir)
+    os.remove(os.path.join(save_dir, name + ".nii.gz"))
 
-    @staticmethod
-    def get_num_files_in_dir(dir_path: str, suffix: str):
-        if os.path.exists(dir_path):
-            return len([x for x in os.listdir(dir_path) if x.endswith(suffix)])
-        return 0
+    # test 3D np tensor
+    name = "3d_np"
+    out_dir = os.path.join(save_dir, name)
+    arr = np.random.rand(2, 3, 4)
+    save_array(save_dir=save_dir, arr=arr, name=name, gray=True)
+    assert get_num_pngs_in_dir(out_dir) == 4
+    assert get_num_niftis_in_dir(save_dir) == 1
+    shutil.rmtree(out_dir)
+    os.remove(os.path.join(save_dir, name + ".nii.gz"))
 
-    @pytest.mark.parametrize(
-        "arr",
-        [
-            tf.random.uniform(shape=(2, 3, 4)),
-            tf.random.uniform(shape=(2, 3, 4, 3)),
-            np.random.rand(2, 3, 4),
-            np.random.rand(2, 3, 4, 3),
-        ],
-    )
-    def test_3d_4d(self, arr: Tuple[tf.Tensor, np.ndarray]):
-        save_array(save_dir=self.save_dir, arr=arr, name=self.arr_name, normalize=True)
-        assert self.get_num_files_in_dir(self.png_dir, suffix=".png") == 4
-        assert self.get_num_files_in_dir(self.save_dir, suffix=".nii.gz") == 1
+    # test 4D np tensor
+    name = "4d_np"
+    out_dir = os.path.join(save_dir, name)
+    arr = np.random.rand(2, 3, 4, 3)
+    save_array(save_dir=save_dir, arr=arr, name=name, gray=True)
+    assert get_num_pngs_in_dir(out_dir) == 4
+    assert get_num_niftis_in_dir(save_dir) == 1
+    shutil.rmtree(out_dir)
+    os.remove(os.path.join(save_dir, name + ".nii.gz"))
 
-    @pytest.mark.parametrize(
-        "arr,err_msg",
-        [
-            [tf.random.uniform(shape=(2, 3, 4, 3, 3)), dim_err_msg],
-            [tf.random.uniform(shape=(2, 3, 4, 1)), ch_err_msg],
-            [np.random.rand(2, 3, 4, 3, 3), dim_err_msg],
-            [np.random.rand(2, 3, 4, 1), ch_err_msg],
-        ],
-    )
-    def test_wrong_shape(self, arr: Tuple[tf.Tensor, np.ndarray], err_msg: str):
-        with pytest.raises(ValueError) as err_info:
-            save_array(
-                save_dir=self.save_dir, arr=arr, name=self.arr_name, normalize=True
-            )
-        assert err_msg in str(err_info.value)
+    # test 4D np tensor without nifti
+    name = "4d_np"
+    out_dir = os.path.join(save_dir, name)
+    arr = np.random.rand(2, 3, 4, 3)
+    save_array(save_dir=save_dir, arr=arr, name=name, gray=True, save_nifti=False)
+    assert get_num_pngs_in_dir(out_dir) == 4
+    assert get_num_niftis_in_dir(save_dir) == 0
+    shutil.rmtree(out_dir)
 
-    @pytest.mark.parametrize("save_nifti", [True, False])
-    def test_save_nifti(self, save_nifti: bool):
-        arr = np.random.rand(2, 3, 4, 3)
-        save_array(
-            save_dir=self.save_dir,
-            arr=arr,
-            name=self.arr_name,
-            normalize=True,
-            save_nifti=save_nifti,
-        )
-        assert self.get_num_files_in_dir(self.save_dir, suffix=".nii.gz") == int(
-            save_nifti
-        )
+    # test 4D np tensor without png
+    name = "4d_np"
+    out_dir = os.path.join(save_dir, name)
+    arr = np.random.rand(2, 3, 4, 3)
+    assert not os.path.exists(out_dir)
+    save_array(save_dir=save_dir, arr=arr, name=name, gray=True, save_png=False)
+    assert not os.path.exists(out_dir)
+    assert get_num_niftis_in_dir(save_dir) == 1
+    os.remove(os.path.join(save_dir, name + ".nii.gz"))
 
-    @pytest.mark.parametrize("save_png", [True, False])
-    def test_save_png(self, save_png: bool):
-        arr = np.random.rand(2, 3, 4, 3)
-        save_array(
-            save_dir=self.save_dir,
-            arr=arr,
-            name=self.arr_name,
-            normalize=True,
-            save_png=save_png,
-        )
-        assert (
-            self.get_num_files_in_dir(self.png_dir, suffix=".png") == int(save_png) * 4
-        )
+    # test 4D np tensor with overwrite
+    name = "4d_np"
+    out_dir = os.path.join(save_dir, name)
+    arr1 = np.random.rand(2, 3, 4, 3)
+    arr2 = np.random.rand(2, 3, 4, 3)
+    assert not is_equal_np(arr1, arr2)
+    nifti_file_path = os.path.join(save_dir, name + ".nii.gz")
+    # save arr1
+    os.makedirs(save_dir, exist_ok=True)
+    nib.save(img=nib.Nifti2Image(arr1, affine=np.eye(4)), filename=nifti_file_path)
+    # save arr2 without overwrite
+    save_array(save_dir=save_dir, arr=arr1, name=name, gray=True, overwrite=False)
+    arr_read = load_nifti_file(file_path=nifti_file_path)
+    assert is_equal_np(arr1, arr_read)
+    # save arr2 with overwrite
+    save_array(save_dir=save_dir, arr=arr2, name=name, gray=True, overwrite=True)
+    arr_read = load_nifti_file(file_path=nifti_file_path)
+    assert is_equal_np(arr2, arr_read)
+    shutil.rmtree(out_dir)
+    os.remove(os.path.join(save_dir, name + ".nii.gz"))
 
-    @pytest.mark.parametrize("overwrite", [True, False])
-    def test_overwrite(self, overwrite: bool):
-        arr1 = np.random.rand(2, 3, 4, 3)
-        arr2 = arr1 + 1
-        nifti_file_path = os.path.join(self.save_dir, self.arr_name + ".nii.gz")
-        # save arr1
-        os.makedirs(self.save_dir, exist_ok=True)
-        nib.save(img=nib.Nifti1Image(arr1, affine=np.eye(4)), filename=nifti_file_path)
-        # save arr2 w/o overwrite
-        save_array(
-            save_dir=self.save_dir,
-            arr=arr2,
-            name=self.arr_name,
-            normalize=True,
-            overwrite=overwrite,
-        )
-        arr_read = load_nifti_file(file_path=nifti_file_path)
-        assert is_equal_np(arr2 if overwrite else arr1, arr_read)
+    # test 5D np tensor
+    name = "5d_np"
+    arr = np.random.rand(2, 3, 4, 1, 3)
+    with pytest.raises(ValueError) as err_info:
+        save_array(save_dir=save_dir, arr=arr, name=name, gray=True)
+    assert "arr must be 3d or 4d numpy array or tf tensor" in str(err_info.value)
+
+    # test 4D np tensor with wrong shape
+    name = "5d_np"
+    arr = np.random.rand(2, 3, 4, 1)
+    with pytest.raises(ValueError) as err_info:
+        save_array(save_dir=save_dir, arr=arr, name=name, gray=True)
+    assert "4d arr must have 3 channels as last dimension" in str(err_info.value)
 
 
 def test_calculate_metrics():

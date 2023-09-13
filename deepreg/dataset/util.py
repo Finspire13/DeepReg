@@ -6,12 +6,11 @@ import glob
 import itertools as it
 import os
 import random
-from typing import List, Tuple, Union
 
 import h5py
 
 
-def get_h5_sorted_keys(filename: str) -> List[str]:
+def get_h5_sorted_keys(filename):
     """
     Function to get sorted keys from filename
     :param filename: h5 file.
@@ -21,9 +20,7 @@ def get_h5_sorted_keys(filename: str) -> List[str]:
         return sorted(h5_file.keys())
 
 
-def get_sorted_file_paths_in_dir_with_suffix(
-    dir_path: str, suffix: Union[str, List[str]]
-) -> List[Tuple[str, ...]]:
+def get_sorted_file_paths_in_dir_with_suffix(dir_path: str, suffix: (str, list)):
     """
     Return the path of all files under the given directory.
 
@@ -55,6 +52,7 @@ def check_difference_between_two_lists(list1: list, list2: list, name: str):
     :param list1: list
     :param list2: list
     :param name: name to be printed in case of difference
+    :raises ValueError: error showing different pairs of items
     """
     diff = [(x, y) for x, y in it.zip_longest(list1, list2) if x != y]
     if len(diff) > 0:
@@ -71,6 +69,8 @@ def get_label_indices(num_labels: int, sample_label: str) -> list:
     """
     if sample_label == "sample":  # sample a random label
         return [random.randrange(num_labels)]
+    elif sample_label == "first":  # use the first label
+        return [0]
     elif sample_label == "all":  # use all labels
         return list(range(num_labels))
     else:

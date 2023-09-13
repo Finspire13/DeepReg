@@ -1,55 +1,33 @@
 """
 A DeepReg Demo for classical affine iterative pairwise registration algorithms
 """
-import argparse
 import os
-import shutil
+from datetime import datetime
 
 import h5py
 import tensorflow as tf
 
 import deepreg.model.layer_util as layer_util
+import deepreg.model.loss.image as image_loss
 import deepreg.util as util
-from deepreg.dataset.preprocess import gen_rand_affine_transform
-from deepreg.registry import REGISTRY
-
-# parser is used to simplify testing
-# please run the script with --full flag to ensure non-testing mode
-# for instance:
-# python script.py --full
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--test",
-    help="Execute the script with reduced image size for test purpose.",
-    dest="test",
-    action="store_true",
-)
-parser.add_argument(
-    "--full",
-    help="Execute the script with full configuration.",
-    dest="test",
-    action="store_false",
-)
-parser.set_defaults(test=False)
-args = parser.parse_args()
 
 MAIN_PATH = os.getcwd()
-PROJECT_DIR = "demos/classical_ct_headneck_affine"
+PROJECT_DIR = r"demos/classical_ct_headneck_affine"
 os.chdir(PROJECT_DIR)
 
 DATA_PATH = "dataset"
 FILE_PATH = os.path.join(DATA_PATH, "demo.h5")
 
 ## registration parameters
-image_loss_config = {"name": "ssd"}
+image_loss_name = "ssd"
 learning_rate = 0.01
-total_iter = int(10) if args.test else int(1000)
+total_iter = int(1000)
 
 ## load image
 if not os.path.exists(DATA_PATH):
-    raise ValueError("Download the data using demo_data.py script")
+    raise ("Download the data using demo_data.py script")
 if not os.path.exists(FILE_PATH):
-    raise ValueError("Download the data using demo_data.py script")
+    raise ("Download the data using demo_data.py script")
 
 fid = h5py.File(FILE_PATH, "r")
 fixed_image = tf.cast(tf.expand_dims(fid["image"], axis=0), dtype=tf.float32)
@@ -59,7 +37,7 @@ fixed_image = (fixed_image - tf.reduce_min(fixed_image)) / (
 
 # generate a radomly-affine-transformed moving image
 fixed_image_size = fixed_image.shape
-transform_random = gen_rand_affine_transform(batch_size=1, scale=0.2)
+transform_random = layer_util.random_transform_generator(batch_size=1, scale=0.2)
 grid_ref = layer_util.get_reference_grid(grid_size=fixed_image_size[1:4])
 grid_random = layer_util.warp_grid(grid_ref, transform_random)
 moving_image = layer_util.resample(vol=fixed_image, loc=grid_random)
@@ -74,9 +52,9 @@ moving_labels = tf.stack(
 )
 
 
-# optimisation
+## optimisation
 @tf.function
-def train_step(grid, weights, optimizer, mov, fix) -> object:
+def train_step(grid, weights, optimizer, mov, fix):
     """
     Train step function for backprop using gradient tape
 
@@ -89,9 +67,8 @@ def train_step(grid, weights, optimizer, mov, fix) -> object:
     """
     with tf.GradientTape() as tape:
         pred = layer_util.resample(vol=mov, loc=layer_util.warp_grid(grid, weights))
-        loss = REGISTRY.build_loss(config=image_loss_config)(
-            y_true=fix,
-            y_pred=pred,
+        loss = image_loss.dissimilarity_fn(
+            y_true=fix, y_pred=pred, name=image_loss_name
         )
     gradients = tape.gradient(loss, [weights])
     optimizer.apply_gradients(zip(gradients, [weights]))
@@ -109,7 +86,7 @@ optimiser = tf.optimizers.Adam(learning_rate)
 for step in range(total_iter):
     loss_opt = train_step(grid_ref, var_affine, optimiser, moving_image, fixed_image)
     if (step % 50) == 0:  # print info
-        tf.print("Step", step, image_loss_config["name"], loss_opt)
+        tf.print("Step", step, image_loss_name, loss_opt)
 
 ## warp the moving image using the optimised affine transformation
 grid_opt = layer_util.warp_grid(grid_ref, var_affine)
@@ -125,9 +102,7 @@ warped_moving_labels = tf.stack(
 )
 
 ## save output to files
-SAVE_PATH = "logs_reg"
-if os.path.exists(SAVE_PATH):
-    shutil.rmtree(SAVE_PATH)
+SAVE_PATH = "output_" + datetime.now().strftime("%Y%m%d-%H%M%S")
 os.mkdir(SAVE_PATH)
 
 arrays = [
@@ -155,7 +130,7 @@ for arr, arr_name in zip(arrays, arr_names):
             save_dir=SAVE_PATH,
             arr=arr[..., n],
             name=arr_name + (arr.shape[-1] > 1) * "_{}".format(n),
-            normalize="image" in arr_name,  # label's value is already in [0, 1]
+            gray=True,
         )
 
 os.chdir(MAIN_PATH)

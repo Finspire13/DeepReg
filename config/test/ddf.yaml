@@ -1,28 +1,43 @@
 train:
-  method: "ddf" # ddf / dvf / conditional
-  backbone:
-    name: "local"
-    num_channel_initial: 1
-    extract_levels: [0, 1, 2, 3, 4]
+  model:
+    method: "ddf" # ddf / dvf / conditional
+    backbone: "local"
+    local:
+      num_channel_initial: 1
+      extract_levels: [0, 1, 2, 3, 4]
+    unet:
+      num_channel_initial: 1
+      depth: 2
+      pooling: true
+      concat_skip: false
   loss:
-    image:
-      name: "lncc"
-      weight: 0.1
-    label:
-      weight: 1.0
-      name: "dice"
-      scales: [0, 1, 2, 4, 8, 16, 32]
+    dissimilarity:
+      image:
+        name: "lncc"
+        weight: 0.1
+      label:
+        weight: 1.0
+        name: "multi_scale"
+        multi_scale:
+          loss_type: "dice"
+          loss_scales: [0, 1, 2, 4, 8, 16, 32]
+        single_scale:
+          loss_type: "cross-entropy"
     regularization:
       weight: 0.5
-      name: "bending"
+      energy_type: "bending"
   preprocess:
-    data_augmentation:
-      name: "affine"
     batch_size: 2
     shuffle_buffer_num_batch: 1
-    num_parallel_calls: -1 # number elements to process asynchronously in parallel during preprocessing, -1 means unlimited, heuristically it should be set to the number of CPU cores available
   optimizer:
-    name: "Adam"
-    learning_rate: 1.0e-5
+    name: "adam"
+    adam:
+      learning_rate: 1.0e-5
+    sgd:
+      learning_rate: 1.0e-4
+      momentum: 0.9
+    rms:
+      learning_rate: 1.0e-4
+      momentum: 0.9
   epochs: 2
   save_period: 2

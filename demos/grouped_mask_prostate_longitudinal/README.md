@@ -12,9 +12,6 @@ This demo uses DeepReg to demonstrate a number of features:
   segmentation in this case - with deep learning;
 - Register intra-patient longitudinal data.
 
-This demo also implements the feature-based registration described in
-[Morphological Change Forecasting for Prostate Glands using Feature-based Registration and Kernel Density Extrapolation](https://arxiv.org/abs/2101.06425).
-
 ## Author
 
 DeepReg Development Team
@@ -29,76 +26,51 @@ detecting and monitoring potential cancerous regions.
 ## Data
 
 This is a demo without real clinical data due to regulatory restrictions. The MR and
-ultrasound images used are simulated dummy 3D Ultrasound images. Data are organized into
-10 separate folds.
+ultrasound images used are simulated dummy images.
 
 ## Instruction
 
-### Installation
-
-Please install DeepReg following the [instructions](../getting_started/install.html) and
-change the current directory to the root directory of DeepReg project, i.e. `DeepReg/`.
-
-### Download data
-
-Please execute the following command to download/pre-process the data and download the
-pre-trained model.
+- [Install DeepReg](https://deepreg.readthedocs.io/en/latest/getting_started/install.html);
+- Change current directory to the root directory of DeepReg project;
+- Run `demo_data.py` script to download 10 folds of unpaired 3D ultrasound images and
+  the pre-trained model.
 
 ```bash
 python demos/grouped_mask_prostate_longitudinal/demo_data.py
 ```
 
-### Launch demo training
-
-Please execute the following command to launch a demo training (the first of the ten
-runs of a 9-fold cross-validation). The training logs and model checkpoints will be
-saved under `demos/grouped_mask_prostate_longitudinal/logs_train`.
-
-```bash
-python demos/grouped_mask_prostate_longitudinal/demo_train.py
-```
-
-Here the training is launched using the GPU of index 0 with a limited number of steps
-and reduced size. Please add flag `--full` to use the original training configuration,
-such as
+- Call `deepreg_train` from command line. The following example uses a single GPU and
+  launches the first of the ten runs of a 9-fold cross-validation, as specified in the
+  [`dataset` section](./grouped_mask_prostate_longitudinal_dataset0.yaml) and the
+  [`train` section](./grouped_mask_prostate_longitudinal_train.yaml), which can be
+  specified in
+  [separate yaml files](https://deepreg.readthedocs.io/en/latest/tutorial/cross_val.html);
 
 ```bash
-python demos/grouped_mask_prostate_longitudinal/demo_train.py --full
+deepreg_train --gpu "0" --config_path demos/grouped_mask_prostate_longitudinal/grouped_mask_prostate_longitudinal.yaml --log_dir grouped_mask_prostate_longitudinal
 ```
 
-### Predict
-
-Please execute the following command to run the prediction with pre-trained model. The
-prediction logs and visualization results will be saved under
-`demos/grouped_mask_prostate_longitudinal/logs_predict`. Check the
-[CLI documentation](../docs/cli.html) for more details about prediction output.
+- Call `deepreg_predict` from command line to use the saved ckpt file for testing on the
+  data partitions specified in the config file, a copy of which would be saved in the
+  [log_dir]. The following example uses a pre-trained model, on CPU. If not specified,
+  the results will be saved at the created timestamp-named directories under /logs.
 
 ```bash
-python demos/grouped_mask_prostate_longitudinal/demo_predict.py
+deepreg_predict --gpu "" --config_path demos/grouped_mask_prostate_longitudinal/grouped_mask_prostate_longitudinal.yaml --ckpt_path demos/grouped_mask_prostate_longitudinal/dataset/pre-trained/weights-epoch500.ckpt --save_png --mode test
 ```
 
-Optionally, the user-trained model can be used by changing the `ckpt_path` variable
-inside `demo_predict.py`. Note that the path should end with `.ckpt` and checkpoints are
-saved under `logs_train` as mentioned above.
+## Pre-trained model
 
-## Visualise
+A pre-trained model will be downloaded after running `demo_data.py` and unzipped at the
+dataset folder under the demo folder. This pre-trained model will be used by default
+with `deepreg_predict`. Run the user-trained model by specifying with `--ckpt_path` the
+location where the ckpt files will be saved, in this case (specified by `deepreg_train`
+as above), /logs/grouped_mask_prostate_longitudinal/.
 
-The following command can be executed to generate a plot of three image slices from the
-the moving image, warped image and fixed image (left to right) to visualise the
-registration. Please see the visualisation tool docs
-[here](https://github.com/DeepRegNet/DeepReg/blob/main/docs/source/docs/visualisation_tool.md)
-for more visualisation options such as animated gifs.
+## Tested DeepReg version
 
-```bash
-deepreg_vis -m 2 -i 'demos/grouped_mask_prostate_longitudinal/logs_predict/<time-stamp>/test/<pair-number>/moving_image.nii.gz, demos/grouped_mask_prostate_longitudinal/logs_predict/<time-stamp>/test/<pair-number>/pred_fixed_image.nii.gz, demos/grouped_mask_prostate_longitudinal/logs_predict/<time-stamp>/test/<pair-number>/fixed_image.nii.gz' --slice-inds '10,16,20' -s demos/grouped_mask_prostate_longitudinal/logs_predict
-```
-
-Note: The prediction must be run before running the command to generate the
-visualisation. The `<time-stamp>` and `<pair-number>` must be entered by the user.
-
-![plot](../assets/grouped_mask_prostate_longitudinal.png)
+Last commit at which demo was tested: 3157f880eb99ce10fc3a4a8ebcc595bd67be24e1
 
 ## Contact
 
-Please [raise an issue](https://github.com/DeepRegNet/DeepReg/issues/new/choose) for any
-questions.
+Please [raise an issue](https://github.com/DeepRegNet/DeepReg/issues/new/choose).

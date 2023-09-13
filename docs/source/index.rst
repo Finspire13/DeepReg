@@ -15,7 +15,7 @@
 
     tutorial/registration
     tutorial/cross_val
-    tutorial/run_cluster
+    tutorial/custom
 
 .. toctree::
     :hidden:
@@ -30,10 +30,8 @@
     :caption: Documentation
 
     docs/cli
-    docs/logging
     docs/configuration
     docs/dataset_loader
-    docs/registry
     docs/experimental
 
 .. toctree::
@@ -43,7 +41,6 @@
 
     api/entry_point
     api/loader
-    api/registry
     api/network
     api/backbone
     api/layer
@@ -56,7 +53,7 @@
     :caption: Contributing to DeepReg
 
     contributing/guide
-    contributing/test
+    contributing/setup
+    contributing/pull_request
     contributing/demo
-    contributing/docs
-    contributing/release
+    contributing/build

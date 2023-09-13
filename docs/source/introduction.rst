@@ -1,6 +1,12 @@
 DeepReg
 =======
 
+.. note::
+
+    DeepReg :superscript:`beta` will be released in Autumn 2020 - however, many
+    tutorials, demos and much of the core functionality are already
+    accessible.
+
 DeepReg is a freely available, community-supported open-source toolkit
 for research and education in medical image registration using deep
 learning.
@@ -27,6 +33,37 @@ owing to its built-in command line tools.
 
 Our development and all related work involved in the project is public,
 and released under the Apache 2.0 license.
+
+
+Contributors
+------------
+
+DeepReg is maintained and led by a team of developers and researchers.
+People with significant contributions to DeepReg are listed below (in
+alphabetical order).
+
+================== =================================================
+Name               Affiliation (at time of contribution)
+================== =================================================
+Adria Casamitjana  University College London
+Alexander Grimwood University College London
+Ester Bonmati      University College London
+Matt Clarkson      University College London
+Nina Montana Brown University College London
+Qianye Yang        University College London
+Remi Delaunay      University College London / King’s College London
+Shaheer Saaed      University College London
+Tom Vercauteren    King’s College London
+Yipeng Hu          University College London
+Yunguan Fu         University College London / InstaDeep
+Zachary Baum       University College London
+Zhe Min            University College London
+================== =================================================
+
+This open-source initiative started within University College London,
+with support from the Wellcome/EPSRC Centre for Interventional and
+Surgical Sciences (`WEISS`_), and partial support from the
+Wellcome/EPSRC Centre for Medical Engineering (`CME`_).
 
 
 Contact
@@ -56,17 +93,3 @@ Alternatively, please contact one or more members of the CoC Committee as approp
 .. _CME: https://medicalengineering.org.uk/
 .. _Code of Conduct: https://github.com/DeepRegNet/DeepReg/blob/main/docs/CODE_OF_CONDUCT.md
 .. _raise an issue: https://github.com/DeepRegNet/DeepReg/issues/new
-
-
-Contributors
-------------
-
-DeepReg is maintained by a team of developers and researchers.
-People with significant contributions to DeepReg are acknowledged in the `Contributor List`_.
-
-This open-source initiative started within University College London,
-with support from the Wellcome/EPSRC Centre for Interventional and
-Surgical Sciences (`WEISS`_), and partial support from the
-Wellcome/EPSRC Centre for Medical Engineering (`CME`_).
-
-.. _Contributor List: https://github.com/DeepRegNet/DeepReg/blob/main/docs/Contributors.md

@@ -4,23 +4,17 @@ Loss
 Image Loss
 ----------
 
-.. automodule:: deepreg.loss.image
+.. automodule:: deepreg.model.loss.image
     :members:
 
 Label Loss
 ----------
 
-.. automodule:: deepreg.loss.label
+.. automodule:: deepreg.model.loss.label
     :members:
 
 Deformation Loss
 ----------------
 
-.. automodule:: deepreg.loss.deform
-    :members:
-
-Loss Util
----------
-
-.. automodule:: deepreg.loss.util
+.. automodule:: deepreg.model.loss.deform
     :members:

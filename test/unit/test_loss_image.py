@@ -4,240 +4,126 @@ pytest style.
 Notes: The format of inputs to the function dissimilarity_fn
 in image.py should be better converted into tf tensor type beforehand.
 """
-
 from test.unit.util import is_equal_tf
-from typing import Tuple
 
 import numpy as np
 import pytest
 import tensorflow as tf
 
-import deepreg.loss.image as image
-from deepreg.constant import EPS
+import deepreg.model.loss.image as image
 
 
-class TestGlobalMutualInformation:
-    @pytest.mark.parametrize(
-        "y_true,y_pred,shape,expected",
-        [
-            (0.6, 0.3, (3, 3, 3, 3), 0.0),
-            (0.6, 0.3, (3, 3, 3, 3, 3), 0.0),
-            (0.0, 1.0, (3, 3, 3, 3, 3), 0.0),
-        ],
+def test_dissimilarity_fn():
+    """
+    Testing computed dissimilarity function by comparing to precomputed, the dissimilarity function can be either normalized cross correlation or sum square error function.
+    """
+
+    # lncc diff images
+    tensor_true = np.array(range(12)).reshape((2, 1, 2, 3))
+    tensor_pred = 0.6 * np.ones((2, 1, 2, 3))
+    tensor_true = tf.convert_to_tensor(tensor_true, dtype=tf.float32)
+    tensor_pred = tf.convert_to_tensor(tensor_pred, dtype=tf.float32)
+
+    name_ncc = "lncc"
+    get_ncc = image.dissimilarity_fn(tensor_true, tensor_pred, name_ncc)
+    expect_ncc = [-0.68002254, -0.9608879]
+
+    assert is_equal_tf(get_ncc, expect_ncc)
+
+    # ssd diff images
+    tensor_true1 = np.zeros((2, 1, 2, 3))
+    tensor_pred1 = 0.6 * np.ones((2, 1, 2, 3))
+    tensor_true1 = tf.convert_to_tensor(tensor_true1, dtype=tf.float32)
+    tensor_pred1 = tf.convert_to_tensor(tensor_pred1, dtype=tf.float32)
+
+    name_ssd = "ssd"
+    get_ssd = image.dissimilarity_fn(tensor_true1, tensor_pred1, name_ssd)
+    expect_ssd = [0.36, 0.36]
+
+    assert is_equal_tf(get_ssd, expect_ssd)
+
+    # TODO gmi diff images
+
+    # lncc same image
+    get_zero_similarity_ncc = image.dissimilarity_fn(
+        tensor_pred1, tensor_pred1, name_ncc
     )
-    def test_zero_info(self, y_true, y_pred, shape, expected):
-        y_true = y_true * np.ones(shape=shape)
-        y_pred = y_pred * np.ones(shape=shape)
-        expected = expected * np.ones(shape=(shape[0],))
-        got = image.GlobalMutualInformation().call(
-            y_true,
-            y_pred,
-        )
-        assert is_equal_tf(got, expected)
+    assert is_equal_tf(get_zero_similarity_ncc, [-1, -1])
 
-    def test_get_config(self):
-        got = image.GlobalMutualInformation().get_config()
-        expected = dict(
-            num_bins=23,
-            sigma_ratio=0.5,
-            reduction=tf.keras.losses.Reduction.AUTO,
-            name="GlobalMutualInformation",
-        )
-        assert got == expected
-
-
-@pytest.mark.parametrize("kernel_size", [3, 5, 7])
-@pytest.mark.parametrize("name", ["gaussian", "triangular", "rectangular"])
-def test_kernel_fn(kernel_size, name):
-    kernel_fn = image.LocalNormalizedCrossCorrelation.kernel_fn_dict[name]
-    filters = kernel_fn(kernel_size)
-    assert filters.shape == (kernel_size,)
-
-
-class TestLocalNormalizedCrossCorrelation:
-    @pytest.mark.parametrize(
-        ("y_true_shape", "y_pred_shape"),
-        [
-            ((2, 3, 4, 5), (2, 3, 4, 5)),
-            ((2, 3, 4, 5), (2, 3, 4, 5, 1)),
-            ((2, 3, 4, 5, 1), (2, 3, 4, 5)),
-            ((2, 3, 4, 5, 1), (2, 3, 4, 5, 1)),
-        ],
+    # ssd same image
+    get_zero_similarity_ssd = image.dissimilarity_fn(
+        tensor_true1, tensor_true1, name_ssd
     )
-    def test_input_shape(self, y_true_shape: Tuple, y_pred_shape: Tuple):
-        """
-        Test input with / without channel axis.
+    assert is_equal_tf(get_zero_similarity_ssd, [0, 0])
 
-        :param y_true_shape: input shape for y_true.
-        :param y_pred_shape: input shape for y_pred.
-        """
-        y_true = tf.ones(shape=y_true_shape)
-        y_pred = tf.ones(shape=y_pred_shape)
-        got = image.LocalNormalizedCrossCorrelation().call(
-            y_true,
-            y_pred,
+    # gmi same image
+    t = tf.ones([4, 3, 3, 3])
+    get_zero_similarity_gmi = image.dissimilarity_fn(t, t, "gmi")
+    assert is_equal_tf(get_zero_similarity_gmi, [0, 0, 0, 0])
+
+    # unknown func name
+    with pytest.raises(AssertionError):
+        image.dissimilarity_fn(
+            tensor_true1, tensor_pred1, "some random string that isn't ssd or lncc"
         )
-        assert got.shape == y_true_shape[:1]
 
-    @pytest.mark.parametrize(
-        ("y_true_shape", "y_pred_shape", "name"),
-        [
-            ((2, 3, 4, 5), (2, 3, 4, 5, 6), "y_pred"),
-            ((2, 3, 4, 5, 6), (2, 3, 4, 5), "y_true"),
-        ],
+
+def test_local_normalized_cross_correlation():
+    """
+    Testing computed local normalized cross correlation function between images using image.local_normalized_cross_correlation by comparing to precomputed.
+    """
+    tensor_true = np.array(range(24)).reshape((2, 1, 2, 3, 2))
+    tensor_pred = 0.6 * np.ones((2, 1, 2, 3, 2))
+    expect = [0.7281439, 0.9847701]
+    get = image.local_normalized_cross_correlation(
+        tensor_true, tensor_pred, kernel_size=9
     )
-    def test_input_shape_err(self, y_true_shape: Tuple, y_pred_shape: Tuple, name: str):
-        """
-        Current LNCC does not support image having channel dimension > 1.
+    assert is_equal_tf(get, expect)
 
-        :param y_true_shape: input shape for y_true.
-        :param y_pred_shape: input shape for y_pred.
-        :param name: name of the tensor having error.
-        """
-        y_true = tf.ones(shape=y_true_shape)
-        y_pred = tf.ones(shape=y_pred_shape)
-        with pytest.raises(ValueError) as err_info:
-            image.LocalNormalizedCrossCorrelation().call(y_true, y_pred)
-        assert f"Last dimension of {name} is not one." in str(err_info.value)
 
-    @pytest.mark.parametrize("value", [0.0, 0.5, 1.0])
-    @pytest.mark.parametrize(
-        ("smooth_nr", "smooth_dr", "expected"),
-        [
-            (1e-5, 1e-5, 1),
-            (0, 1e-5, 0),
-            (1e-5, 0, np.inf),
-            (0, 0, np.nan),
-            (1e-7, 1e-7, 1),
-        ],
+def test_ssd():
+    """
+    Testing computed sum squared error function between images using image.ssd by comparing to precomputed.
+    """
+    tensor_true = 0.3 * np.array(range(108)).reshape((2, 3, 3, 3, 2))
+    tensor_pred = 0.1 * np.ones((2, 3, 3, 3, 2))
+    tensor_pred[:, :, :, :, :] = 1
+    get = image.ssd(tensor_true, tensor_pred)
+    expect = [70.165, 557.785]
+    assert is_equal_tf(get, expect)
+
+
+def test_gmi():
+    """
+    Testing computed global mutual information between images using image.global_mutual_information by comparing to precomputed.
+    """
+    # fixed non trival value
+    t1 = np.array(range(108)).reshape((4, 3, 3, 3, 1)) / 108.0
+    t1 = tf.convert_to_tensor(t1, dtype=tf.float32)
+    t2 = t1 + 0.05
+    get = image.global_mutual_information(t1, t2)
+    expect = tf.constant(
+        [0.84280217, 0.84347117, 0.8441777, 0.8128618], dtype=tf.float32
     )
-    def test_smooth(
-        self,
-        value: float,
-        smooth_nr: float,
-        smooth_dr: float,
-        expected: float,
-    ):
-        """
-        Test values in extreme cases where variances are all zero.
+    assert is_equal_tf(get, expect)
 
-        :param value: value for input.
-        :param smooth_nr: constant for numerator.
-        :param smooth_dr: constant for denominator.
-        :param expected: target value.
-        """
-        kernel_size = 5
-        mid = kernel_size // 2
-        shape = (1, kernel_size, kernel_size, kernel_size, 1)
-        y_true = tf.ones(shape=shape) * value
-        y_pred = tf.ones(shape=shape) * value
+    # zero values
+    t1 = tf.zeros((4, 3, 3, 3, 1), dtype=tf.float32)
+    t2 = t1
+    get = image.global_mutual_information(t1, t2)
+    expect = tf.constant([0, 0, 0, 0], dtype=tf.float32)
+    assert is_equal_tf(get, expect)
 
-        got = image.LocalNormalizedCrossCorrelation(
-            kernel_size=kernel_size,
-            smooth_nr=smooth_nr,
-            smooth_dr=smooth_dr,
-        ).calc_ncc(
-            y_true,
-            y_pred,
-        )
-        got = got[0, mid, mid, mid, 0]
-        expected = tf.constant(expected)
-        assert is_equal_tf(got, expected)
+    # zero value and negative value
+    t1 = tf.zeros((4, 3, 3, 3, 1), dtype=tf.float32)
+    t2 = t1 - 1.0  # will be clipped to zero
+    get = image.global_mutual_information(t1, t2)
+    expect = tf.constant([0, 0, 0, 0], dtype=tf.float32)
+    assert is_equal_tf(get, expect)
 
-    @pytest.mark.parametrize(
-        "kernel_type",
-        ["rectangular", "gaussian", "triangular"],
-    )
-    @pytest.mark.parametrize(
-        "kernel_size",
-        [3, 5, 7],
-    )
-    def test_exact_value(self, kernel_type, kernel_size):
-        """
-        Test the exact value at the center of a cube.
-
-        :param kernel_type: name of kernel.
-        :param kernel_size: size of the kernel and the cube.
-        """
-        # init
-        mid = kernel_size // 2
-        tf.random.set_seed(0)
-        y_true = tf.random.uniform(shape=(1, kernel_size, kernel_size, kernel_size, 1))
-        y_pred = tf.random.uniform(shape=(1, kernel_size, kernel_size, kernel_size, 1))
-        loss = image.LocalNormalizedCrossCorrelation(
-            kernel_type=kernel_type, kernel_size=kernel_size
-        )
-
-        # obtained value
-        got = loss.calc_ncc(y_true=y_true, y_pred=y_pred)
-        got = got[0, mid, mid, mid, 0]  # center voxel
-
-        # target value
-        kernel_3d = (
-            loss.kernel[:, None, None]
-            * loss.kernel[None, :, None]
-            * loss.kernel[None, None, :]
-        )
-        kernel_3d = kernel_3d[None, :, :, :, None]
-
-        y_true_mean = tf.reduce_sum(y_true * kernel_3d) / loss.kernel_vol
-        y_true_normalized = y_true - y_true_mean
-        y_true_var = tf.reduce_sum(y_true_normalized ** 2 * kernel_3d)
-
-        y_pred_mean = tf.reduce_sum(y_pred * kernel_3d) / loss.kernel_vol
-        y_pred_normalized = y_pred - y_pred_mean
-        y_pred_var = tf.reduce_sum(y_pred_normalized ** 2 * kernel_3d)
-
-        cross = tf.reduce_sum(y_true_normalized * y_pred_normalized * kernel_3d)
-        expected = (cross ** 2 + EPS) / (y_pred_var * y_true_var + EPS)
-
-        # check
-        assert is_equal_tf(got, expected)
-
-    def test_kernel_error(self):
-        """Test the error message when using wrong kernel."""
-        with pytest.raises(ValueError) as err_info:
-            image.LocalNormalizedCrossCorrelation(kernel_type="constant")
-        assert "Wrong kernel_type constant for LNCC loss type." in str(err_info.value)
-
-    def test_get_config(self):
-        """Test the config is saved correctly."""
-        got = image.LocalNormalizedCrossCorrelation().get_config()
-        expected = dict(
-            kernel_size=9,
-            kernel_type="rectangular",
-            reduction=tf.keras.losses.Reduction.AUTO,
-            name="LocalNormalizedCrossCorrelation",
-            smooth_nr=1e-5,
-            smooth_dr=1e-5,
-        )
-        assert got == expected
-
-
-class TestGlobalNormalizedCrossCorrelation:
-    @pytest.mark.parametrize(
-        "y_true,y_pred,shape,expected",
-        [
-            (0.6, 0.3, (3, 3), 1),
-            (0.6, 0.3, (3, 3, 3), 1),
-            (0.6, -0.3, (3, 3, 3), 1),
-            (0.6, 0.3, (3, 3, 3, 3), 1),
-        ],
-    )
-    def test_output(self, y_true, y_pred, shape, expected):
-
-        y_true = y_true * tf.ones(shape=shape)
-        y_pred = y_pred * tf.ones(shape=shape)
-
-        pad_width = tuple([(0, 0)] + [(1, 1)] * (len(shape) - 1))
-        y_true = np.pad(y_true, pad_width=pad_width)
-        y_pred = np.pad(y_pred, pad_width=pad_width)
-
-        got = image.GlobalNormalizedCrossCorrelation().call(
-            y_true,
-            y_pred,
-        )
-
-        expected = expected * tf.ones(shape=(shape[0],))
-
-        assert is_equal_tf(got, expected)
+    # one values
+    t1 = tf.ones((4, 3, 3, 3, 1), dtype=tf.float32)
+    t2 = t1
+    get = image.global_mutual_information(t1, t2)
+    expect = tf.constant([0, 0, 0, 0], dtype=tf.float32)
+    assert is_equal_tf(get, expect)

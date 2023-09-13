@@ -1,7 +1,2 @@
 dataset:
-  train:
-    labeled: true
-  valid:
-    labeled: true
-  test:
-    labeled: true
+  labeled: true

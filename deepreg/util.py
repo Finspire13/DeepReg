@@ -1,6 +1,6 @@
+import logging
 import os
 from datetime import datetime
-from typing import Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import nibabel as nib
@@ -8,31 +8,26 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
-import deepreg.loss.label as label_loss
-from deepreg import log
+import deepreg.model.loss.image as image_loss
+import deepreg.model.loss.label as label_loss
 from deepreg.dataset.load import get_data_loader
 from deepreg.dataset.loader.interface import DataLoader
-from deepreg.dataset.loader.util import normalize_array
-
-logger = log.get(__name__)
 
 
 def build_dataset(
     dataset_config: dict,
     preprocess_config: dict,
-    split: str,
+    mode: str,
     training: bool,
     repeat: bool,
-) -> Tuple[Optional[DataLoader], Optional[tf.data.Dataset], Optional[int]]:
+) -> [(DataLoader, None), (tf.data.Dataset, None), (int, None)]:
     """
     Function to prepare dataset for training and validation.
     :param dataset_config: configuration for dataset
     :param preprocess_config: configuration for preprocess
-    :param split: train or valid or test
+    :param mode: train or valid or test
     :param training: bool, if true, data augmentation and shuffling will be added
-    :param repeat: bool, if true, dataset will be repeated,
-        true for train/valid dataset during model.fit
-
+    :param repeat: bool, if true, dataset will be repeated, true for train/valid dataset during model.fit
     :return:
     - (data_loader_train, dataset_train, steps_per_epoch_train)
     - (data_loader_val, dataset_val, steps_per_epoch_valid)
@@ -40,11 +35,10 @@ def build_dataset(
     Cannot move this function into deepreg/dataset/util.py
     as we need DataLoader to define the output
     """
-    assert split in ["train", "valid", "test"]
-    data_loader = get_data_loader(dataset_config, split)
+    assert mode in ["train", "valid", "test"]
+    data_loader = get_data_loader(dataset_config, mode)
     if data_loader is None:
         return None, None, None
-
     dataset = data_loader.get_dataset_and_preprocess(
         training=training, repeat=repeat, **preprocess_config
     )
@@ -53,20 +47,16 @@ def build_dataset(
     return data_loader, dataset, steps_per_epoch
 
 
-def build_log_dir(log_dir: str, exp_name: str) -> str:
+def build_log_dir(log_dir: str) -> str:
     """
-    Build a log directory for the experiment.
-
-    :param log_dir: path of the log directory.
-    :param exp_name: name of the experiment.
-    :return: the path of directory to save logs.
+    :param log_dir: str, path to where training logs to be stored.
+    :return: the path of directory to save logs
     """
     log_dir = os.path.join(
-        os.path.expanduser(log_dir),
-        datetime.now().strftime("%Y%m%d-%H%M%S") if exp_name == "" else exp_name,
+        "logs", datetime.now().strftime("%Y%m%d-%H%M%S") if log_dir == "" else log_dir
     )
     if os.path.exists(log_dir):
-        logger.warning("Log directory %s exists already.", log_dir)
+        logging.warning("Log directory {} exists already.".format(log_dir))
     else:
         os.makedirs(log_dir)
     return log_dir
@@ -74,9 +64,9 @@ def build_log_dir(log_dir: str, exp_name: str) -> str:
 
 def save_array(
     save_dir: str,
-    arr: Union[np.ndarray, tf.Tensor],
+    arr: (np.ndarray, tf.Tensor),
     name: str,
-    normalize: bool,
+    gray: bool,
     save_nifti: bool = True,
     save_png: bool = True,
     overwrite: bool = True,
@@ -85,8 +75,7 @@ def save_array(
     :param save_dir: path of the directory to save
     :param arr: 3D or 4D array to be saved
     :param name: name of the array, e.g. image, label, etc.
-    :param normalize: true if the array's value has to be normalized when saving pngs,
-        false means the value is between [0, 1].
+    :param gray: true if the array is between 0,1
     :param save_nifti: if true, array will be saved in nifti
     :param save_png: if true, array will be saved in png
     :param overwrite: if false, will not save the file in case the file exists
@@ -94,7 +83,9 @@ def save_array(
     if isinstance(arr, tf.Tensor):
         arr = arr.numpy()
     if len(arr.shape) not in [3, 4]:
-        raise ValueError(f"arr must be 3d or 4d numpy array or tf tensor, got {arr}")
+        raise ValueError(
+            f"arr must be 3d or 4d numpy array or tf tensor, " f"got {arr}"
+        )
     is_4d = len(arr.shape) == 4
     if is_4d:
         # if 4D array, it must be 3 channels
@@ -123,9 +114,6 @@ def save_array(
     if save_png:
         png_dir = os.path.join(save_dir, name)
         dir_existed = os.path.exists(png_dir)
-        if normalize:
-            # normalize arr such that it has only values between 0, 1
-            arr = normalize_array(arr=arr)
         for depth_index in range(arr.shape[2]):
             png_file_path = os.path.join(png_dir, f"depth{depth_index}_{name}.png")
             if overwrite or (not os.path.exists(png_file_path)):
@@ -134,22 +122,22 @@ def save_array(
                 plt.imsave(
                     fname=png_file_path,
                     arr=arr[:, :, depth_index, :] if is_4d else arr[:, :, depth_index],
-                    vmin=0,
-                    vmax=1,
-                    cmap="PiYG" if is_4d else "gray",
+                    vmin=0 if gray else None,
+                    vmax=1 if gray else None,
+                    cmap="gray" if gray else "PiYG",
                 )
 
 
 def calculate_metrics(
     fixed_image: tf.Tensor,
-    fixed_label: Optional[tf.Tensor],
-    pred_fixed_image: Optional[tf.Tensor],
-    pred_fixed_label: Optional[tf.Tensor],
+    fixed_label: (tf.Tensor, None),
+    pred_fixed_image: (tf.Tensor, None),
+    pred_fixed_label: (tf.Tensor, None),
     fixed_grid_ref: tf.Tensor,
     sample_index: int,
 ) -> dict:
     """
-    Calculate image/label based metrics.
+    Calculate image/label based metrics
     :param fixed_image: shape=(batch, f_dim1, f_dim2, f_dim3)
     :param fixed_label: shape=(batch, f_dim1, f_dim2, f_dim3) or None
     :param pred_fixed_image: shape=(batch, f_dim1, f_dim2, f_dim3)
@@ -164,16 +152,18 @@ def calculate_metrics(
         y_pred = pred_fixed_image[sample_index : (sample_index + 1), :, :, :]
         y_true = tf.expand_dims(y_true, axis=4)
         y_pred = tf.expand_dims(y_pred, axis=4)
-        ssd = label_loss.SumSquaredDifference()(y_true=y_true, y_pred=y_pred).numpy()
+        ssd = image_loss.ssd(y_true=y_true, y_pred=y_pred).numpy()[0]
     else:
         ssd = None
 
     if fixed_label is not None and pred_fixed_label is not None:
         y_true = fixed_label[sample_index : (sample_index + 1), :, :, :]
         y_pred = pred_fixed_label[sample_index : (sample_index + 1), :, :, :]
-        dice = label_loss.DiceScore(binary=True)(y_true=y_true, y_pred=y_pred).numpy()
+        dice = label_loss.dice_score(y_true=y_true, y_pred=y_pred, binary=True).numpy()[
+            0
+        ]
         tre = label_loss.compute_centroid_distance(
-            y_true=y_true, y_pred=y_pred, grid=fixed_grid_ref
+            y_true=y_true, y_pred=y_pred, grid=fixed_grid_ref[0, :, :, :, :]
         ).numpy()[0]
     else:
         dice = None
@@ -198,7 +188,6 @@ def save_metric_dict(save_dir: str, metrics: list):
 
     # calculate mean/median/std per label
     df_per_label = df.drop(["pair_index"], axis=1)
-    df_per_label = df_per_label.fillna(value=np.nan)
     df_per_label = df_per_label.groupby(["label_index"])
     df_per_label = pd.concat(
         [

@@ -21,18 +21,15 @@ main_path = os.getcwd()
 os.chdir(main_path)
 
 # Demo directory
-project_dir = "demos/unpaired_mr_brain"
+project_dir = r"demos/unpaired_mr_brain"
 os.chdir(join(main_path, project_dir))
 
 # Data storage directory
-data_folder_name = "dataset"
+data_folder_name = "data"
 path_to_data_folder = join(main_path, project_dir, data_folder_name)
-if os.path.exists(path_to_data_folder):
-    shutil.rmtree(path_to_data_folder)
-os.mkdir(path_to_data_folder)
 
 # Pretrained model storage directory
-model_folder_name = join(project_dir, data_folder_name, "pretrained")
+model_folder_name = "logs"
 path_to_model_folder = join(main_path, model_folder_name)
 
 #################
@@ -40,7 +37,7 @@ path_to_model_folder = join(main_path, model_folder_name)
 #################
 # Data
 FILENAME = "data_mr_brain"
-ORIGIN = "https://github.com/acasamitjana/Data/raw/master/L2R_Task4_HippocampusMRI.tar"
+ORIGIN = "https://cmiclab.cs.ucl.ac.uk/acasamitjana/learn2reg_t4/-/raw/master/L2R_Task4_HippocampusMRI.tar"
 TAR_FILE = FILENAME + ".tar"
 
 get_file(os.path.abspath(TAR_FILE), ORIGIN)
@@ -52,7 +49,7 @@ with tarfile.open(join(main_path, project_dir, TAR_FILE), "r") as tar_ref:
     tar_ref.extractall(data_folder_name)
 
 remove(TAR_FILE)
-print("Files unzipped successfully")
+print("Files unzipped!")
 
 # Model
 PRETRAINED_MODEL = "unpaired_mr_brain.zip"
@@ -116,7 +113,6 @@ for f in img_files:
     else:
         shutil.copy(join(path_to_init_label, f), join(path_to_test, "labels"))
 
-shutil.rmtree(join(path_to_data_folder, "Training"))
 print("Files succesfully copied to " + path_to_train + " and " + path_to_test)
 
 #################

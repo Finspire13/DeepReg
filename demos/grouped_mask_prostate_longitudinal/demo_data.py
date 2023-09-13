@@ -9,7 +9,7 @@ import h5py
 from scipy import ndimage
 from tensorflow.keras.utils import get_file
 
-PROJECT_DIR = "demos/grouped_mask_prostate_longitudinal"
+PROJECT_DIR = r"demos/grouped_mask_prostate_longitudinal"
 os.chdir(PROJECT_DIR)
 
 DATA_PATH = "dataset"
@@ -35,7 +35,7 @@ ratio_test = 0.2
 data_filename = os.path.join(DATA_PATH, ZIP_FILE + ".h5")
 fid_data = h5py.File(data_filename, "r")
 num_data = len(fid_data)
-ids_group, ids_ob = [], []
+ids_group, ids_ob = list(), list()
 for f in fid_data:
     ds, ig, io = fid_data[f].name.split("-")
     if ds == "/group":
@@ -50,18 +50,11 @@ num_train = num_group - num_val - num_test
 print("Found %d data in %d groups." % (num_data, num_group))
 print(
     "Dividing into %d-%d-%d for train-val-test (%0.2f-%0.2f-%0.2f)..."
-    % (
-        num_train,
-        num_val,
-        num_test,
-        1 - ratio_val - ratio_test,
-        ratio_val,
-        ratio_test,
-    )
+    % (num_train, num_val, num_test, 1 - ratio_val - ratio_test, ratio_val, ratio_test)
 )
 
 # write
-fid_image, fid_label = [], []
+fid_image, fid_label = list(), list()
 folders = [
     os.path.join(DATA_PATH, "train"),
     os.path.join(DATA_PATH, "val"),
@@ -104,14 +97,14 @@ os.remove(data_filename)
 
 print("Done. \n")
 
-## now download the pretrained model
-MODEL_PATH = os.path.join(DATA_PATH, "pretrained")
+## now download the pre-trained model
+MODEL_PATH = os.path.join(DATA_PATH, "pre-trained")
 if os.path.exists(MODEL_PATH):
     shutil.rmtree(MODEL_PATH)
 os.mkdir(MODEL_PATH)
 
-ZIP_PATH = "grouped_mask_prostate_longitudinal_1"
-ORIGIN = "https://github.com/DeepRegNet/deepreg-model-zoo/raw/master/demo/grouped_mask_prostate_longitudinal/20210110.zip"
+ZIP_PATH = "grouped_mask_prostate_longitudinal-ckpt"
+ORIGIN = "https://github.com/DeepRegNet/deepreg-model-zoo/raw/master/grouped_mask_prostate_longitudinal-ckpt.zip"
 
 zip_file = os.path.join(MODEL_PATH, ZIP_PATH + ".zip")
 get_file(os.path.abspath(zip_file), ORIGIN)
@@ -120,5 +113,5 @@ with zipfile.ZipFile(zip_file, "r") as zf:
 os.remove(zip_file)
 
 print(
-    "pretrained model is downloaded and unzipped in %s." % os.path.abspath(MODEL_PATH)
+    "Pre-trained model is downloaded and unzipped in %s." % os.path.abspath(MODEL_PATH)
 )

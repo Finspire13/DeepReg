@@ -3,10 +3,12 @@
 We use [Sphinx](https://www.sphinx-doc.org/en/master/) to organize the documentation and
 it is hosted in [ReadTheDocs](https://readthedocs.org/projects/deepreg/).
 
-## Local Build
+## Build
 
 Please run the following command under `docs/` directory for generating the
-documentation pages locally. Generated files are under `docs/build/html/`
+documentation pages locally. This is also included in
+[Travis-CI](https://travis-ci.org/github/DeepRegNet/DeepReg) jobs to ensure the
+documentation quality.
 
 ```bash
 make clean html
@@ -15,7 +17,7 @@ make clean html
 where
 
 - `clean` removes the possible built files.
-- Optionally we can add `SPHINXOPTS="-W"` to fail on any warnings, but we are currently
+- Optionally we can add `SPHINXOPTS="-W"` to prevent warnings, but we are currently
   having `document isn't included in any toctree` warning and no better solution has
   been found yet.
 
