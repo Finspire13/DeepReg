@@ -298,7 +298,7 @@ def predict(
     )
 
     # optimizer
-    optimizer = opt.build_optimizer(optimizer_config=config["train"]["optimizer"])
+    optimizer = opt.build_optimizer_legacy(optimizer_config=config["train"]["optimizer"])
 
     # model
     model = build_model(
